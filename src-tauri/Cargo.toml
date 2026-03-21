@@ -1,0 +1,84 @@
+[package]
+name = "vite-stock"
+version = "0.1.0"
+description = "A Tauri App"
+authors = ["you"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "vite_stock_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "keygen"
+path = "src/bin/keygen.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri                     = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-shell        = "2"
+tauri-plugin-dialog       = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-fs           = "2"
+tauri-plugin-process      = "2"
+tauri-plugin-opener = "2"
+
+# ── Database ──────────────────────────────────────────────────────────────────
+rusqlite = { version = "0.31", features = ["bundled"] }
+ 
+# ── Async ─────────────────────────────────────────────────────────────────────
+tokio = { version = "1", features = ["full"] }
+ 
+# ── Serialization ─────────────────────────────────────────────────────────────
+serde      = { version = "1", features = ["derive"] }
+serde_json = "1"
+ 
+# ── Security / License ────────────────────────────────────────────────────────
+ed25519-dalek = { version = "2", features = ["rand_core", "serde"] }
+aes-gcm       = "0.10"
+hkdf          = "0.12"
+sha2          = "0.10"
+hex           = "0.4"
+base64        = "0.22"
+rand          = { version = "0.8", features = ["getrandom"] }
+zeroize       = { version = "1", features = ["derive"] }
+machine-uid   = "0.5"
+sysinfo       = { version = "0.31", default-features = false, features = ["system"] }
+ 
+# ── Thermal printing ──────────────────────────────────────────────────────────
+# Real serial/USB port I/O for ESC/POS printers
+serialport = "4.4"
+ 
+# ── Excel export ──────────────────────────────────────────────────────────────
+rust_xlsxwriter = "0.75"
+ 
+# ── Error handling ────────────────────────────────────────────────────────────
+thiserror = "1"
+anyhow    = "1"
+ 
+# ── Misc ─────────────────────────────────────────────────────────────────────
+chrono = { version = "0.4", features = ["serde"] }
+uuid   = { version = "1",   features = ["v4"] }
+ 
+# ── Windows-specific ─────────────────────────────────────────────────────────
+[target.'cfg(target_os = "windows")'.dependencies]
+winreg = "0.52"
+ 
+[features]
+default         = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+ 
+[profile.release]
+panic         = "abort"
+codegen-units = 1
+lto           = true
+opt-level     = 3
+strip         = true
+
