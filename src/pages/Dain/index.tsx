@@ -1,10 +1,18 @@
-import { notifications } from "@mantine/notifications";
 // src/pages/Dain/index.tsx
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { clsx } from "clsx";
-import { FeatureGate } from "@/components/ui/FeatureGate";
-
+import {
+  Stack, Group, Title, Text, TextInput, Button, Paper,
+  Badge, Divider, Textarea, NumberInput, ActionIcon,
+  Alert, ScrollArea, Box, Loader, Center,
+} from "@mantine/core";
+import {
+  IconSearch, IconPlus, IconMinus, IconAlertCircle,
+  IconPhone, IconCurrencyDollar, IconHistory,
+  IconCheck, IconX,
+} from "@tabler/icons-react";
+import { notifications } from "@mantine/notifications";
+import { FeatureGate }   from "@/components/ui/FeatureGate";
 import { Features, type CustomerDainSummary, type DainEntry } from "@/types";
 import * as cmd from "@/lib/commands";
 
@@ -17,24 +25,25 @@ export default function DainPage() {
   const [loading,  setLoading]  = useState(false);
   const [notFound, setNotFound] = useState(false);
 
-  // Entry form state
-  const [mode,     setMode]     = useState<"debt" | "repayment" | null>(null);
-  const [amount,   setAmount]   = useState("");
-  const [notes,    setNotes]    = useState("");
-  const [saving,   setSaving]   = useState(false);
+  // Entry form
+  const [mode,   setMode]   = useState<"debt" | "repayment" | null>(null);
+  const [amount, setAmount] = useState<number | string>("");
+  const [notes,  setNotes]  = useState("");
+  const [saving, setSaving] = useState(false);
 
   const search = async () => {
     if (!phone.trim()) return;
     setLoading(true);
     setNotFound(false);
+    setCustomer(null);
+    setHistory([]);
+    setMode(null);
     try {
       const c = await cmd.getCustomerDain(phone.trim());
       setCustomer(c);
       const h = await cmd.getDainHistory(c.customer_id);
       setHistory(h);
     } catch {
-      setCustomer(null);
-      setHistory([]);
       setNotFound(true);
     } finally {
       setLoading(false);
@@ -43,18 +52,20 @@ export default function DainPage() {
 
   const handleEntry = async () => {
     if (!customer || !mode || !amount || saving) return;
+    const amountNum = typeof amount === "number" ? amount : parseFloat(String(amount));
+    if (!amountNum || amountNum <= 0) return;
     setSaving(true);
     try {
       if (mode === "debt") {
-        await cmd.addDainEntry(customer.customer_id, null, parseFloat(amount), notes || null);
+        await cmd.addDainEntry(customer.customer_id, null, amountNum, notes || null);
+        notifications.show({ color: "red", title: "Dette enregistrée", message: `${amountNum.toFixed(2)} DZD ajouté au solde.` });
       } else {
-        await cmd.repayDain(customer.customer_id, parseFloat(amount), notes || null);
+        await cmd.repayDain(customer.customer_id, amountNum, notes || null);
+        notifications.show({ color: "green", title: "Remboursement enregistré", message: `${amountNum.toFixed(2)} DZD déduit du solde.` });
       }
-      notifications.show({ color: "green", message: mode === "debt" ? "Dette enregistrée." : "Remboursement enregistré." });
       setMode(null);
       setAmount("");
       setNotes("");
-      // Refresh
       const [c, h] = await Promise.all([
         cmd.getCustomerDain(phone.trim()),
         cmd.getDainHistory(customer.customer_id),
@@ -70,151 +81,241 @@ export default function DainPage() {
 
   return (
     <FeatureGate flag={Features.DAIN_LEDGER}>
-      <div className="p-6 max-w-3xl mx-auto flex flex-col gap-6">
+      <Stack gap="lg" p="lg" maw={800} mx="auto">
 
-        <h1 className="text-2xl font-bold">{t("dain.title")}</h1>
+        {/* ── Header ────────────────────────────────────────────────────── */}
+        <Title order={2}>{t("dain.title")}</Title>
 
-        {/* Search */}
-        <div className="flex gap-3">
-          <input
-            type="tel"
-            className="input flex-1"
+        {/* ── Search ────────────────────────────────────────────────────── */}
+        <Group gap="sm">
+          <TextInput
+            style={{ flex: 1 }}
             placeholder={t("dain.search_phone")}
+            leftSection={<IconPhone size={16} />}
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && search()}
             autoFocus
           />
-          <button className="btn-primary" onClick={search} disabled={loading}>
-            {loading ? "⏳" : "🔍 Rechercher"}
-          </button>
-        </div>
+          <Button
+            leftSection={<IconSearch size={16} />}
+            onClick={search}
+            loading={loading}
+          >
+            Rechercher
+          </Button>
+        </Group>
 
+        {/* ── Not found ─────────────────────────────────────────────────── */}
         {notFound && (
-          <p className="text-[var(--color-danger-600)] text-sm">
-            ⚠ {t("dain.no_customer")}
-          </p>
+          <Alert icon={<IconAlertCircle size={16} />} color="orange" radius="md">
+            {t("dain.no_customer")}
+          </Alert>
         )}
 
+        {/* ── Loading ───────────────────────────────────────────────────── */}
+        {loading && (
+          <Center py="xl">
+            <Loader />
+          </Center>
+        )}
+
+        {/* ── Customer card ─────────────────────────────────────────────── */}
         {customer && (
-          <>
-            {/* Customer card */}
-            <div className="card">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h2 className="text-lg font-bold">{customer.name}</h2>
-                  <p className="text-[var(--color-text-muted)] text-sm">📞 {customer.phone}</p>
-                </div>
-                <div className={clsx(
-                  "text-right rounded-xl px-4 py-2",
-                  customer.balance > 0
-                    ? "bg-[var(--color-danger-100)] text-[var(--color-danger-600)]"
-                    : "bg-[var(--color-ok-100)] text-[var(--color-ok-600)]",
-                )}>
-                  <p className="text-xs font-medium">{t("dain.balance")}</p>
-                  <p className="text-2xl font-bold">{customer.balance.toFixed(2)} DZD</p>
-                </div>
-              </div>
+          <Stack gap="md">
+            <Paper withBorder p="lg" radius="md">
+              <Group justify="space-between" align="flex-start">
+                {/* Customer info */}
+                <Stack gap={4}>
+                  <Text fw={700} size="xl">{customer.name}</Text>
+                  <Group gap="xs">
+                    <IconPhone size={14} color="var(--mantine-color-dimmed)" />
+                    <Text size="sm" c="dimmed">{customer.phone}</Text>
+                  </Group>
+                </Stack>
+
+                {/* Balance badge */}
+                <Paper
+                  p="md"
+                  radius="md"
+                  style={{
+                    background: customer.balance > 0
+                      ? "var(--mantine-color-red-0)"
+                      : "var(--mantine-color-green-0)",
+                    border: `1px solid ${customer.balance > 0
+                      ? "var(--mantine-color-red-3)"
+                      : "var(--mantine-color-green-3)"}`,
+                    textAlign: "right",
+                  }}
+                >
+                  <Text size="xs" c="dimmed" fw={600} tt="uppercase">
+                    {t("dain.balance")}
+                  </Text>
+                  <Text
+                    fw={900}
+                    size="xl"
+                    ff="monospace"
+                    c={customer.balance > 0 ? "red.7" : "green.7"}
+                  >
+                    {customer.balance.toFixed(2)} DZD
+                  </Text>
+                </Paper>
+              </Group>
 
               {/* Action buttons */}
-              <div className="flex gap-3 mt-4 pt-4 border-t border-[var(--color-border)]">
-                <button
-                  className="btn-danger flex-1 py-2"
+              <Divider my="md" />
+              <Group>
+                <Button
+                  color="red"
+                  variant={mode === "debt" ? "filled" : "light"}
+                  leftSection={<IconPlus size={16} />}
                   onClick={() => setMode(mode === "debt" ? null : "debt")}
+                  style={{ flex: 1 }}
                 >
-                  + {t("dain.add_debt")}
-                </button>
-                <button
-                  className="btn-primary flex-1 py-2"
-                  style={{ background: "var(--color-ok-600)" }}
+                  {t("dain.add_debt")}
+                </Button>
+                <Button
+                  color="green"
+                  variant={mode === "repayment" ? "filled" : "light"}
+                  leftSection={<IconMinus size={16} />}
                   onClick={() => setMode(mode === "repayment" ? null : "repayment")}
+                  style={{ flex: 1 }}
                 >
-                  ✓ {t("dain.add_repay")}
-                </button>
-              </div>
+                  {t("dain.add_repay")}
+                </Button>
+              </Group>
 
-              {/* Entry form */}
+              {/* Inline entry form */}
               {mode && (
-                <div className="mt-4 pt-4 border-t border-[var(--color-border)] space-y-3">
-                  <p className="font-semibold text-sm">
+                <Paper
+                  mt="md"
+                  p="md"
+                  radius="md"
+                  style={{
+                    background: mode === "debt"
+                      ? "var(--mantine-color-red-0)"
+                      : "var(--mantine-color-green-0)",
+                    border: `1px solid ${mode === "debt"
+                      ? "var(--mantine-color-red-2)"
+                      : "var(--mantine-color-green-2)"}`,
+                  }}
+                >
+                  <Text fw={600} size="sm" mb="sm">
                     {mode === "debt" ? "Nouvelle dette" : "Remboursement"}
-                  </p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-medium block mb-1">{t("dain.amount")}</label>
-                      <input
-                        type="number"
-                        min="0.01"
-                        step="0.01"
-                        className="input"
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
-                        autoFocus
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium block mb-1">{t("dain.notes")}</label>
-                      <input
-                        type="text"
-                        className="input"
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
-                        placeholder="Optionnel"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex gap-2 justify-end">
-                    <button className="btn-ghost text-sm" onClick={() => { setMode(null); setAmount(""); setNotes(""); }}>
-                      Annuler
-                    </button>
-                    <button className="btn-primary text-sm" onClick={handleEntry} disabled={!amount || saving}>
-                      {saving ? "⏳" : "Confirmer"}
-                    </button>
-                  </div>
-                </div>
+                  </Text>
+                  <Group align="flex-end" gap="sm">
+                    <NumberInput
+                      label={t("dain.amount")}
+                      placeholder="0.00"
+                      value={amount}
+                      onChange={setAmount}
+                      min={0.01}
+                      step={100}
+                      decimalScale={2}
+                      fixedDecimalScale
+                      leftSection={<IconCurrencyDollar size={14} />}
+                      rightSection={<Text size="xs" c="dimmed" pr={4}>DZD</Text>}
+                      rightSectionWidth={40}
+                      style={{ flex: 1 }}
+                      autoFocus
+                    />
+                    <TextInput
+                      label={t("dain.notes")}
+                      placeholder="Optionnel"
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      style={{ flex: 1 }}
+                    />
+                    <Group gap="xs" pb={1}>
+                      <Button
+                        color={mode === "debt" ? "red" : "green"}
+                        leftSection={<IconCheck size={14} />}
+                        onClick={handleEntry}
+                        loading={saving}
+                        disabled={!amount}
+                      >
+                        Confirmer
+                      </Button>
+                      <Button
+                        variant="subtle"
+                        color="gray"
+                        leftSection={<IconX size={14} />}
+                        onClick={() => { setMode(null); setAmount(""); setNotes(""); }}
+                      >
+                        Annuler
+                      </Button>
+                    </Group>
+                  </Group>
+                </Paper>
               )}
-            </div>
+            </Paper>
 
-            {/* History */}
-            <div className="card">
-              <h3 className="font-semibold mb-3">{t("dain.history")}</h3>
+            {/* ── History ───────────────────────────────────────────────── */}
+            <Paper withBorder p="lg" radius="md">
+              <Group gap="xs" mb="md">
+                <IconHistory size={18} />
+                <Text fw={700}>{t("dain.history")}</Text>
+                <Badge size="sm" variant="light">{history.length}</Badge>
+              </Group>
+
               {history.length === 0 ? (
-                <p className="text-[var(--color-text-muted)] text-sm text-center py-6">Aucune transaction</p>
+                <Center py="xl">
+                  <Text c="dimmed" size="sm">Aucune transaction</Text>
+                </Center>
               ) : (
-                <div className="space-y-2">
-                  {history.map((e) => (
-                    <div
-                      key={e.id}
-                      className={clsx(
-                        "flex items-center justify-between rounded-lg px-3 py-2 text-sm",
-                        e.entry_type === "debt"
-                          ? "bg-[var(--color-danger-100)]"
-                          : "bg-[var(--color-ok-100)]",
-                      )}
-                    >
-                      <div>
-                        <span className={clsx(
-                          "font-medium",
-                          e.entry_type === "debt"
-                            ? "text-[var(--color-danger-600)]"
-                            : "text-[var(--color-ok-600)]",
-                        )}>
-                          {e.entry_type === "debt" ? `+ ${t("dain.debt")}` : `− ${t("dain.repayment")}`}
-                        </span>
-                        {e.notes && <span className="ms-2 text-[var(--color-text-muted)]">— {e.notes}</span>}
-                        <p className="text-xs text-[var(--color-text-muted)]">{e.created_at.slice(0, 16).replace("T", " ")}</p>
-                      </div>
-                      <span className="font-bold font-mono">
-                        {e.entry_type === "debt" ? "+" : "−"}{e.amount.toFixed(2)} DZD
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                <ScrollArea mah={400}>
+                  <Stack gap="xs">
+                    {history.map((entry) => (
+                      <Group
+                        key={entry.id}
+                        justify="space-between"
+                        p="sm"
+                        style={{
+                          borderRadius: 8,
+                          background: entry.entry_type === "debt"
+                            ? "var(--mantine-color-red-0)"
+                            : "var(--mantine-color-green-0)",
+                          border: `1px solid ${entry.entry_type === "debt"
+                            ? "var(--mantine-color-red-2)"
+                            : "var(--mantine-color-green-2)"}`,
+                        }}
+                      >
+                        <Box>
+                          <Group gap="xs">
+                            <Badge
+                              color={entry.entry_type === "debt" ? "red" : "green"}
+                              variant="light"
+                              size="sm"
+                            >
+                              {entry.entry_type === "debt"
+                                ? `＋ ${t("dain.debt")}`
+                                : `－ ${t("dain.repayment")}`}
+                            </Badge>
+                            {entry.notes && (
+                              <Text size="xs" c="dimmed">— {entry.notes}</Text>
+                            )}
+                          </Group>
+                          <Text size="xs" c="dimmed" mt={2}>
+                            {entry.created_at.slice(0, 16).replace("T", " ")}
+                          </Text>
+                        </Box>
+                        <Text
+                          fw={700}
+                          ff="monospace"
+                          c={entry.entry_type === "debt" ? "red.7" : "green.7"}
+                        >
+                          {entry.entry_type === "debt" ? "+" : "−"}
+                          {entry.amount.toFixed(2)} DZD
+                        </Text>
+                      </Group>
+                    ))}
+                  </Stack>
+                </ScrollArea>
               )}
-            </div>
-          </>
+            </Paper>
+          </Stack>
         )}
-      </div>
+      </Stack>
     </FeatureGate>
   );
 }

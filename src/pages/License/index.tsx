@@ -1,19 +1,47 @@
-import { notifications } from "@mantine/notifications";
 // src/pages/License/index.tsx
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import {
+  Stack, Group, Title, Text, Paper, Badge, Textarea,
+  Button, CopyButton, Tooltip, ActionIcon, Code,
+  Divider, SimpleGrid, ThemeIcon, Alert, Box,
+} from "@mantine/core";
+import {
+  IconCheck, IconCopy, IconKey, IconShieldCheck,
+  IconShieldOff, IconShieldLock, IconCpu, IconRefresh,
+  IconAlertCircle,
+} from "@tabler/icons-react";
+import { notifications }   from "@mantine/notifications";
 import { useLicenseStore } from "@/store/licenseStore";
+import { Features }        from "@/types";
+import * as cmd            from "@/lib/commands";
 
-import * as cmd from "@/lib/commands";
-import { clsx } from "clsx";
+// ─── Feature flag registry ────────────────────────────────────────────────────
+
+const FLAG_LABELS: [number, string][] = [
+  [Features.POS_BASIC,          "Caisse (POS)"],
+  [Features.INVENTORY_MGMT,     "Gestion des stocks"],
+  [Features.THERMAL_PRINT,      "Impression thermique"],
+  [Features.DAIN_LEDGER,        "Dain — Crédit client"],
+  [Features.A4_REPORTS,         "Rapports A4"],
+  [Features.MULTI_CART,         "Multi-caisse (Attente)"],
+  [Features.ADVANCED_ANALYTICS, "Analytiques avancés"],
+];
+
+const TIER_COLOR: Record<string, string> = {
+  basic:        "gray",
+  professional: "blue",
+  enterprise:   "violet",
+};
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function LicensePage() {
   const { t } = useTranslation();
-  
   const { license, setLicense } = useLicenseStore();
 
-  const [hwid, setHwid]       = useState("Chargement…");
-  const [blob, setBlob]       = useState("");
+  const [hwid,    setHwid]    = useState("Chargement…");
+  const [blob,    setBlob]    = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -23,119 +51,224 @@ export default function LicensePage() {
   }, []);
 
   const handleActivate = async () => {
-    if (!blob.trim()) { notifications.show({ color: "red", message: "Entrez une clé de licence." }); return; }
+    const key = blob.trim();
+    if (!key) {
+      notifications.show({ color: "orange", message: "Entrez une clé de licence." });
+      return;
+    }
     setLoading(true);
     try {
-      const state = await cmd.verifyLicense(blob.trim());
+      const state = await cmd.verifyLicense(key);
       setLicense(state);
-      notifications.show({ color: "green", message: "Licence activée avec succès !" });
+      notifications.show({
+        color:   "green",
+        title:   "✅ Licence activée",
+        message: `Forfait ${state.tier.toUpperCase()} activé avec succès.`,
+      });
       setBlob("");
     } catch (e) {
-      notifications.show({ color: "red", message: `Activation échouée : ${e}` });
+      notifications.show({
+        color:   "red",
+        title:   "Activation échouée",
+        message: String(e),
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const copyHwid = () => {
-    navigator.clipboard.writeText(hwid);
-    notifications.show({ color: "green", message: "HWID copié dans le presse-papier !" });
-  };
-
-  const tierColor: Record<string, string> = {
-    basic:        "badge-ok",
-    professional: "badge-warn",
-    enterprise:   "bg-[var(--color-brand-100)] text-[var(--color-brand-700)] px-2 py-0.5 rounded-full text-xs font-semibold",
-  };
-
   return (
-    <div className="p-8 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">{t("license.title")}</h1>
+    <Stack gap="lg" p="lg" maw={720} mx="auto">
+      <Title order={2}>{t("license.title")}</Title>
 
-      {/* Current status */}
-      <div className={clsx("card mb-6", license.is_valid ? "border-green-200" : "border-red-200")}>
-        <div className="flex items-center gap-3 mb-3">
-          <span className="text-3xl">{license.is_valid ? "✅" : "⚠️"}</span>
-          <div>
-            <p className="font-semibold text-lg">
-              {license.is_valid ? t("license.valid") : t("license.invalid")}
-            </p>
-            {license.is_valid && (
-              <div className="flex items-center gap-2 mt-1">
-                <span className={tierColor[license.tier] ?? "badge-ok"}>
-                  {license.tier.toUpperCase()}
-                </span>
-                <span className="text-sm text-[var(--color-text-muted)]">
-                  {license.expires_at
-                    ? t("license.expires", { date: license.expires_at })
-                    : t("license.perpetual")}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
+      {/* ── Current status card ───────────────────────────────────────── */}
+      <Paper
+        withBorder
+        p="lg"
+        radius="md"
+        style={{
+          borderColor: license.is_valid
+            ? "var(--mantine-color-green-3)"
+            : "var(--mantine-color-orange-3)",
+          background: license.is_valid
+            ? "var(--mantine-color-green-0)"
+            : "var(--mantine-color-orange-0)",
+        }}
+      >
+        <Group justify="space-between" align="flex-start">
+          <Group gap="sm">
+            <ThemeIcon
+              size="lg"
+              radius="md"
+              color={license.is_valid ? "green" : "orange"}
+              variant="light"
+            >
+              {license.is_valid
+                ? <IconShieldCheck size={22} />
+                : <IconShieldOff size={22} />}
+            </ThemeIcon>
+            <Box>
+              <Text fw={700} size="lg">
+                {license.is_valid ? t("license.valid") : t("license.invalid")}
+              </Text>
+              {license.is_valid && (
+                <Group gap="xs" mt={4}>
+                  <Badge
+                    color={TIER_COLOR[license.tier] ?? "gray"}
+                    variant="filled"
+                    tt="uppercase"
+                  >
+                    {license.tier}
+                  </Badge>
+                  <Text size="xs" c="dimmed">
+                    {license.expires_at
+                      ? t("license.expires", { date: license.expires_at })
+                      : t("license.perpetual")}
+                  </Text>
+                </Group>
+              )}
+            </Box>
+          </Group>
+        </Group>
 
-        {/* Feature flags */}
+        {/* Feature flags grid */}
         {license.is_valid && (
-          <div className="mt-3 pt-3 border-t border-[var(--color-border)] grid grid-cols-2 gap-1.5">
-            {[
-              [1,   "POS de base"],
-              [2,   "Gestion des stocks"],
-              [4,   "Impression thermique"],
-              [8,   "Dain (crédit)"],
-              [16,  "Rapports A4"],
-              [32,  "Multi-caisse"],
-              [64,  "Analytiques avancés"],
-            ].map(([flag, label]) => {
-              const active = (license.features & (flag as number)) !== 0;
-              return (
-                <div key={flag as number} className={clsx(
-                  "flex items-center gap-2 text-sm px-3 py-1.5 rounded-md",
-                  active ? "bg-green-50 text-green-800" : "bg-gray-50 text-gray-400",
-                )}>
-                  <span>{active ? "✓" : "○"}</span>
-                  <span>{label as string}</span>
-                </div>
-              );
-            })}
-          </div>
+          <>
+            <Divider my="md" />
+            <SimpleGrid cols={2} spacing="xs">
+              {FLAG_LABELS.map(([flag, label]) => {
+                const active = (license.features & flag) !== 0;
+                return (
+                  <Group
+                    key={flag}
+                    gap="xs"
+                    p="xs"
+                    style={{
+                      borderRadius: 6,
+                      background: active
+                        ? "var(--mantine-color-green-1)"
+                        : "var(--mantine-color-gray-1)",
+                    }}
+                  >
+                    <Text c={active ? "green.7" : "gray.5"} size="sm">
+                      {active ? "✓" : "○"}
+                    </Text>
+                    <Text size="sm" c={active ? "green.8" : "gray.5"}>
+                      {label}
+                    </Text>
+                  </Group>
+                );
+              })}
+            </SimpleGrid>
+          </>
         )}
-      </div>
+      </Paper>
 
-      {/* HWID */}
-      <div className="card mb-6">
-        <label className="text-sm font-semibold block mb-2">{t("license.hwid_label")}</label>
-        <div className="flex items-center gap-2">
-          <code className="flex-1 bg-[var(--color-surface-dim)] px-3 py-2 rounded-lg text-sm font-mono break-all border border-[var(--color-border)]">
+      {/* ── HWID card ─────────────────────────────────────────────────── */}
+      <Paper withBorder p="lg" radius="md">
+        <Group gap="xs" mb="md">
+          <IconCpu size={18} color="var(--mantine-color-blue-6)" />
+          <Text fw={700}>{t("license.hwid_label")}</Text>
+        </Group>
+
+        <Group align="flex-start" gap="sm">
+          <Code
+            block
+            style={{
+              flex: 1,
+              wordBreak: "break-all",
+              fontSize: 12,
+              userSelect: "all",
+            }}
+          >
             {hwid}
-          </code>
-          <button className="btn-ghost shrink-0" onClick={copyHwid}>
-            📋 {t("license.copy_hwid")}
-          </button>
-        </div>
-        <p className="text-xs text-[var(--color-text-muted)] mt-2">
-          Communiquez cet identifiant à votre revendeur pour obtenir une clé de licence.
-        </p>
-      </div>
+          </Code>
+          <Group gap="xs">
+            <CopyButton value={hwid} timeout={2000}>
+              {({ copied, copy }) => (
+                <Tooltip label={copied ? "Copié !" : t("license.copy_hwid")} withArrow>
+                  <ActionIcon
+                    size="lg"
+                    variant={copied ? "filled" : "light"}
+                    color={copied ? "teal" : "blue"}
+                    onClick={copy}
+                  >
+                    {copied ? <IconCheck size={18} /> : <IconCopy size={18} />}
+                  </ActionIcon>
+                </Tooltip>
+              )}
+            </CopyButton>
+            <Tooltip label="Relire les composants matériels" withArrow>
+              <ActionIcon
+                size="lg"
+                variant="light"
+                color="gray"
+                onClick={() => {
+                  setHwid("Chargement…");
+                  cmd.getHwid().then(setHwid).catch((e) => setHwid(`Erreur: ${e}`));
+                }}
+              >
+                <IconRefresh size={18} />
+              </ActionIcon>
+            </Tooltip>
+          </Group>
+        </Group>
 
-      {/* Activation */}
-      <div className="card">
-        <label className="text-sm font-semibold block mb-2">{t("license.enter_key")}</label>
-        <textarea
-          className="input font-mono text-sm h-28 resize-none"
+        <Alert
+          mt="sm"
+          icon={<IconAlertCircle size={14} />}
+          color="blue"
+          variant="light"
+          radius="md"
+          style={{ fontSize: 12 }}
+        >
+          Transmettez ce code à votre revendeur pour obtenir une clé de licence
+          liée à cet appareil. Il est impossible de l'inverser.
+        </Alert>
+      </Paper>
+
+      {/* ── Activation card ───────────────────────────────────────────── */}
+      <Paper withBorder p="lg" radius="md">
+        <Group gap="xs" mb="md">
+          <IconShieldLock size={18} color="var(--mantine-color-blue-6)" />
+          <Text fw={700}>{t("license.enter_key")}</Text>
+        </Group>
+
+        <Textarea
           value={blob}
           onChange={(e) => setBlob(e.target.value)}
-          placeholder="Collez votre clé de licence ici…"
-          spellCheck={false}
+          placeholder="SUPERPOS-eyJleHBpcmVz…"
+          minRows={4}
+          maxRows={8}
+          autosize
+          styles={{
+            input: {
+              fontFamily:  "monospace",
+              fontSize:    12,
+              wordBreak:   "break-all",
+            },
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+              e.preventDefault();
+              handleActivate();
+            }
+          }}
         />
-        <button
-          className="btn-primary mt-3 w-full py-2.5"
-          onClick={handleActivate}
-          disabled={loading}
-        >
-          {loading ? "⏳ Activation…" : t("license.activate")}
-        </button>
-      </div>
-    </div>
+
+        <Group justify="space-between" align="center" mt="md">
+          <Text size="xs" c="dimmed">
+            Vérification entièrement hors-ligne · Ctrl+↵ pour activer
+          </Text>
+          <Button
+            leftSection={<IconKey size={16} />}
+            onClick={handleActivate}
+            loading={loading}
+          >
+            {t("license.activate")}
+          </Button>
+        </Group>
+      </Paper>
+    </Stack>
   );
 }

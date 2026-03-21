@@ -1,21 +1,30 @@
-import { notifications } from "@mantine/notifications";
 // src/pages/Inventory/index.tsx
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { clsx } from "clsx";
-import { FeatureGate } from "@/components/ui/FeatureGate";
-
+import {
+  Stack, Group, Title, Button, Paper, Badge, Text,
+  TextInput, Alert, Table, Box, Loader, Center,
+  SegmentedControl, Tooltip, ScrollArea,
+} from "@mantine/core";
+import {
+  IconPlus, IconAlertTriangle, IconSearch,
+  IconPackage, IconCalendar,
+} from "@tabler/icons-react";
+import { notifications }  from "@mantine/notifications";
+import { FeatureGate }    from "@/components/ui/FeatureGate";
 import { Features, type InventoryBatch, getExpiryStatus } from "@/types";
 import type { AddBatchInput } from "@/lib/commands";
 import * as cmd from "@/lib/commands";
 import { AddBatchModal } from "./AddBatchModal";
 
-const EXPIRY_STYLE: Record<ReturnType<typeof getExpiryStatus>, string> = {
-  expired:  "bg-[var(--color-danger-100)] text-[var(--color-danger-600)] font-bold",
-  critical: "bg-orange-100 text-orange-700 font-bold",
-  warning:  "bg-[var(--color-warn-100)] text-[var(--color-warn-600)]",
-  ok:       "bg-[var(--color-ok-100)] text-[var(--color-ok-600)]",
-  none:     "bg-gray-100 text-gray-500",
+// ─── Status config ────────────────────────────────────────────────────────────
+
+const EXPIRY_COLOR: Record<ReturnType<typeof getExpiryStatus>, string> = {
+  expired:  "red",
+  critical: "orange",
+  warning:  "yellow",
+  ok:       "green",
+  none:     "gray",
 };
 
 const EXPIRY_LABEL: Record<ReturnType<typeof getExpiryStatus>, string> = {
@@ -26,18 +35,18 @@ const EXPIRY_LABEL: Record<ReturnType<typeof getExpiryStatus>, string> = {
   none:     "—",
 };
 
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function InventoryPage() {
   const { t } = useTranslation();
 
-  const [batches,    setBatches]   = useState<InventoryBatch[]>([]);
-  const [alerts,     setAlerts]    = useState<InventoryBatch[]>([]);
-  const [loading,    setLoading]   = useState(true);
-  const [tab,        setTab]       = useState<"all" | "alerts">("all");
-  const [addModal,   setAddModal]  = useState(false);
-  const [search,     setSearch]    = useState("");
+  const [batches,  setBatches]  = useState<InventoryBatch[]>([]);
+  const [alerts,   setAlerts]   = useState<InventoryBatch[]>([]);
+  const [loading,  setLoading]  = useState(true);
+  const [tab,      setTab]      = useState<"all" | "alerts">("all");
+  const [addOpen,  setAddOpen]  = useState(false);
+  const [search,   setSearch]   = useState("");
 
-  // `notifications` from Mantine is a stable module-level singleton —
-  // it does not need to appear in the useCallback dependency array.
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -52,7 +61,7 @@ export default function InventoryPage() {
     } finally {
       setLoading(false);
     }
-  }, []); // ← stable: no external reactive deps
+  }, []);
 
   useEffect(() => { load(); }, [load]);
 
@@ -63,148 +72,184 @@ export default function InventoryPage() {
   const handleAddBatch = async (input: AddBatchInput) => {
     try {
       await cmd.addInventoryBatch(input);
-      notifications.show({ color: "green", message: "Stock ajouté avec succès." });
-      setAddModal(false);
+      notifications.show({ color: "green", title: "Stock ajouté", message: "Nouveau lot enregistré avec succès." });
+      setAddOpen(false);
       load();
     } catch (e) {
       notifications.show({ color: "red", message: String(e) });
     }
   };
 
+  // Expiry stats
+  const expiredCount  = alerts.filter(b => getExpiryStatus(b.days_until_expiry) === "expired").length;
+  const warningCount  = alerts.filter(b => ["critical","warning"].includes(getExpiryStatus(b.days_until_expiry))).length;
+
   return (
     <FeatureGate flag={Features.INVENTORY_MGMT}>
-      <div className="flex flex-col h-full p-6 gap-4">
+      <Stack gap="lg" p="lg" style={{ height: "100vh", overflow: "hidden" }}>
 
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">{t("inventory.title")}</h1>
-          <button className="btn-primary" onClick={() => setAddModal(true)}>
-            + {t("inventory.add_batch")}
-          </button>
-        </div>
+        {/* ── Header ───────────────────────────────────────────────────── */}
+        <Group justify="space-between">
+          <Title order={2}>{t("inventory.title")}</Title>
+          <Button leftSection={<IconPlus size={16} />} onClick={() => setAddOpen(true)}>
+            {t("inventory.add_batch")}
+          </Button>
+        </Group>
 
-        {/* Alert summary strip */}
+        {/* ── Alert strip ──────────────────────────────────────────────── */}
         {alerts.length > 0 && (
-          <div
-            className="flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--color-warn-100)] border border-[var(--color-warn-600)] cursor-pointer"
+          <Alert
+            icon={<IconAlertTriangle size={16} />}
+            color="orange"
+            radius="md"
+            style={{ cursor: "pointer" }}
             onClick={() => setTab("alerts")}
           >
-            <span className="text-2xl">⚠️</span>
-            <div>
-              <p className="font-semibold text-[var(--color-warn-600)] text-sm">
-                {alerts.filter((b) => getExpiryStatus(b.days_until_expiry) === "expired").length} batch(s) expirés ·{" "}
-                {alerts.filter((b) => ["critical","warning"].includes(getExpiryStatus(b.days_until_expiry))).length} expirant dans les 30 jours
-              </p>
-              <p className="text-xs text-[var(--color-warn-600)] opacity-70">Cliquez pour voir les alertes</p>
-            </div>
-          </div>
+            <Group gap="xs" wrap="wrap">
+              {expiredCount > 0 && (
+                <Badge color="red" variant="filled" size="sm">
+                  {expiredCount} expiré{expiredCount > 1 ? "s" : ""}
+                </Badge>
+              )}
+              {warningCount > 0 && (
+                <Badge color="orange" variant="filled" size="sm">
+                  {warningCount} expirant dans 30 j.
+                </Badge>
+              )}
+              <Text size="sm">Cliquez pour voir les alertes d'expiration.</Text>
+            </Group>
+          </Alert>
         )}
 
-        {/* Tabs + search */}
-        <div className="flex items-center gap-4">
-          <div className="flex rounded-lg border border-[var(--color-border)] overflow-hidden">
-            {(["all","alerts"] as const).map((t_) => (
-              <button
-                key={t_}
-                onClick={() => setTab(t_)}
-                className={clsx(
-                  "px-4 py-2 text-sm font-medium transition-colors",
-                  tab === t_
-                    ? "bg-[var(--color-brand-600)] text-white"
-                    : "bg-white text-[var(--color-text-muted)] hover:bg-[var(--color-surface-dim)]",
-                )}
-              >
-                {t_ === "all" ? `Tous les stocks (${batches.length})` : `Alertes (${alerts.length})`}
-              </button>
-            ))}
-          </div>
-          <input
-            type="text"
-            className="input max-w-xs"
+        {/* ── Filters row ──────────────────────────────────────────────── */}
+        <Group>
+          <SegmentedControl
+            value={tab}
+            onChange={(v) => setTab(v as "all" | "alerts")}
+            data={[
+              { label: `Tous les stocks (${batches.length})`, value: "all" },
+              { label: `Alertes (${alerts.length})`, value: "alerts" },
+            ]}
+          />
+          <TextInput
             placeholder="Filtrer par produit…"
+            leftSection={<IconSearch size={16} />}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            style={{ flex: 1, maxWidth: 300 }}
           />
-        </div>
+        </Group>
 
-        {/* Table */}
+        {/* ── Table ────────────────────────────────────────────────────── */}
         {loading ? (
-          <div className="flex-1 flex items-center justify-center">
-            <span className="animate-pulse text-[var(--color-text-muted)]">Chargement…</span>
-          </div>
+          <Center style={{ flex: 1 }}>
+            <Loader size="lg" />
+          </Center>
         ) : (
-          <div className="card overflow-hidden p-0 flex-1 overflow-y-auto">
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-[var(--color-surface-dim)] border-b border-[var(--color-border)]">
-                <tr className="text-xs uppercase tracking-wide text-[var(--color-text-muted)]">
-                  <th className="text-start px-4 py-3">Produit</th>
-                  <th className="text-center px-3 py-3">{t("inventory.qty")}</th>
-                  <th className="text-center px-3 py-3">{t("inventory.expiry")}</th>
-                  <th className="text-center px-3 py-3">Statut</th>
-                  <th className="text-start px-3 py-3">{t("inventory.supplier")}</th>
-                  <th className="text-start px-3 py-3">{t("inventory.received")}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--color-border)]">
-                {displayed.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="text-center py-16 text-[var(--color-text-muted)]">
-                      Aucun résultat
-                    </td>
-                  </tr>
-                ) : (
-                  displayed.map((b) => {
-                    const status = getExpiryStatus(b.days_until_expiry);
-                    return (
-                      <tr
-                        key={b.id}
-                        className={clsx(
-                          "hover:bg-[var(--color-surface-dim)] transition-colors",
-                          (status === "expired" || status === "critical") && "bg-red-50/50",
-                        )}
-                      >
-                        <td className="px-4 py-3 font-medium">{b.product_name}</td>
-                        <td className="px-3 py-3 text-center font-mono font-semibold">
-                          {b.quantity % 1 === 0 ? b.quantity.toFixed(0) : b.quantity.toFixed(2)}
-                        </td>
-                        <td className="px-3 py-3 text-center">
-                          {b.expiry_date ? (
-                            <span className="font-mono text-xs">{b.expiry_date}</span>
-                          ) : (
-                            <span className="text-[var(--color-text-muted)]">—</span>
-                          )}
-                          {b.days_until_expiry !== null && (
-                            <p className="text-xs mt-0.5 text-[var(--color-text-muted)]">
-                              {b.days_until_expiry >= 0
-                                ? `dans ${b.days_until_expiry}j`
-                                : `il y a ${Math.abs(b.days_until_expiry)}j`}
-                            </p>
-                          )}
-                        </td>
-                        <td className="px-3 py-3 text-center">
-                          <span className={clsx("text-xs px-2 py-0.5 rounded-full", EXPIRY_STYLE[status])}>
-                            {EXPIRY_LABEL[status]}
-                          </span>
-                        </td>
-                        <td className="px-3 py-3 text-[var(--color-text-muted)]">
-                          {b.supplier_ref ?? "—"}
-                        </td>
-                        <td className="px-3 py-3 text-xs text-[var(--color-text-muted)]">
-                          {b.received_at.slice(0, 10)}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
+          <Paper withBorder radius="md" style={{ flex: 1, overflow: "hidden" }}>
+            <ScrollArea style={{ height: "100%" }}>
+              <Table stickyHeader highlightOnHover withRowBorders>
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>Produit</Table.Th>
+                    <Table.Th style={{ textAlign: "center" }}>{t("inventory.qty")}</Table.Th>
+                    <Table.Th style={{ textAlign: "center" }}>{t("inventory.expiry")}</Table.Th>
+                    <Table.Th style={{ textAlign: "center" }}>Statut</Table.Th>
+                    <Table.Th>{t("inventory.supplier")}</Table.Th>
+                    <Table.Th>{t("inventory.received")}</Table.Th>
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {displayed.length === 0 ? (
+                    <Table.Tr>
+                      <Table.Td colSpan={6}>
+                        <Center py="xl">
+                          <Stack align="center" gap="xs" opacity={0.5}>
+                            <IconPackage size={40} stroke={1} />
+                            <Text c="dimmed">Aucun résultat</Text>
+                          </Stack>
+                        </Center>
+                      </Table.Td>
+                    </Table.Tr>
+                  ) : (
+                    displayed.map((b) => {
+                      const status = getExpiryStatus(b.days_until_expiry);
+                      return (
+                        <Table.Tr
+                          key={b.id}
+                          style={{
+                            background: (status === "expired" || status === "critical")
+                              ? "var(--mantine-color-red-0)"
+                              : undefined,
+                          }}
+                        >
+                          <Table.Td>
+                            <Text fw={600} size="sm">{b.product_name}</Text>
+                          </Table.Td>
 
-        {addModal && (
-          <AddBatchModal onSave={handleAddBatch} onClose={() => setAddModal(false)} />
+                          <Table.Td style={{ textAlign: "center" }}>
+                            <Text ff="monospace" fw={700}>
+                              {b.quantity % 1 === 0
+                                ? b.quantity.toFixed(0)
+                                : b.quantity.toFixed(2)}
+                            </Text>
+                          </Table.Td>
+
+                          <Table.Td style={{ textAlign: "center" }}>
+                            {b.expiry_date ? (
+                              <Stack gap={2} align="center">
+                                <Text size="xs" ff="monospace">{b.expiry_date}</Text>
+                                {b.days_until_expiry !== null && (
+                                  <Text size="xs" c="dimmed">
+                                    {b.days_until_expiry >= 0
+                                      ? `dans ${b.days_until_expiry} j`
+                                      : `il y a ${Math.abs(b.days_until_expiry)} j`}
+                                  </Text>
+                                )}
+                              </Stack>
+                            ) : (
+                              <Text c="dimmed" size="sm">—</Text>
+                            )}
+                          </Table.Td>
+
+                          <Table.Td style={{ textAlign: "center" }}>
+                            <Badge
+                              color={EXPIRY_COLOR[status]}
+                              variant="light"
+                              size="sm"
+                            >
+                              {EXPIRY_LABEL[status]}
+                            </Badge>
+                          </Table.Td>
+
+                          <Table.Td>
+                            <Text size="sm" c="dimmed">
+                              {b.supplier_ref ?? "—"}
+                            </Text>
+                          </Table.Td>
+
+                          <Table.Td>
+                            <Text size="xs" c="dimmed">
+                              {b.received_at.slice(0, 10)}
+                            </Text>
+                          </Table.Td>
+                        </Table.Tr>
+                      );
+                    })
+                  )}
+                </Table.Tbody>
+              </Table>
+            </ScrollArea>
+          </Paper>
         )}
-      </div>
+      </Stack>
+
+      {/* ── Add batch modal ───────────────────────────────────────────── */}
+      <AddBatchModal
+        opened={addOpen}
+        onSave={handleAddBatch}
+        onClose={() => setAddOpen(false)}
+      />
     </FeatureGate>
   );
 }

@@ -1,9 +1,16 @@
-import { notifications } from "@mantine/notifications";
 // src/pages/Products/index.tsx
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { clsx } from "clsx";
-
+import {
+  Stack, Group, Title, Button, TextInput, Paper, Badge,
+  Text, Table, ActionIcon, Tooltip, Center, Loader,
+  ScrollArea, Modal,
+} from "@mantine/core";
+import {
+  IconPlus, IconSearch, IconPencil, IconTrash,
+  IconTag, IconAlertTriangle,
+} from "@tabler/icons-react";
+import { notifications }  from "@mantine/notifications";
 import type { Product, CreateProductInput } from "@/types";
 import * as cmd from "@/lib/commands";
 import { ProductFormModal } from "./ProductFormModal";
@@ -11,18 +18,16 @@ import { ProductFormModal } from "./ProductFormModal";
 export default function ProductsPage() {
   const { t } = useTranslation();
 
-  const [products, setProducts]   = useState<Product[]>([]);
-  const [filtered, setFiltered]   = useState<Product[]>([]);
-  const [search,   setSearch]     = useState("");
-  const [loading,  setLoading]    = useState(true);
-  const [modal,    setModal]      = useState<"create" | "edit" | null>(null);
-  const [editing,  setEditing]    = useState<Product | null>(null);
-  const [deleting, setDeleting]   = useState<number | null>(null);
+  const [products,    setProducts]    = useState<Product[]>([]);
+  const [filtered,    setFiltered]    = useState<Product[]>([]);
+  const [search,      setSearch]      = useState("");
+  const [loading,     setLoading]     = useState(true);
+  const [formOpen,    setFormOpen]    = useState(false);
+  const [editing,     setEditing]     = useState<Product | null>(null);
+  const [deleteTarget,setDeleteTarget]= useState<Product | null>(null);
 
-  // ── Load ───────────────────────────────────────────────────────────────────
+  // ── Load ──────────────────────────────────────────────────────────────────
 
-  // `notifications` from Mantine is a stable module-level singleton —
-  // it does not need to appear in the useCallback dependency array.
   const loadProducts = useCallback(async () => {
     setLoading(true);
     try {
@@ -34,27 +39,29 @@ export default function ProductsPage() {
     } finally {
       setLoading(false);
     }
-  }, []); // ← stable: no external reactive deps
+  }, []);
 
   useEffect(() => { loadProducts(); }, [loadProducts]);
 
-  // ── Search ─────────────────────────────────────────────────────────────────
+  // ── Search filter ─────────────────────────────────────────────────────────
 
   useEffect(() => {
     const q = search.toLowerCase();
     if (!q) { setFiltered(products); return; }
     setFiltered(
-      products.filter(
-        (p) =>
-          p.name_fr.toLowerCase().includes(q) ||
-          p.name_ar.includes(q) ||
-          (p.gtin ?? "").includes(q) ||
-          (p.category_name_fr ?? "").toLowerCase().includes(q),
+      products.filter((p) =>
+        p.name_fr.toLowerCase().includes(q) ||
+        p.name_ar.includes(q) ||
+        (p.gtin ?? "").includes(q) ||
+        (p.category_name_fr ?? "").toLowerCase().includes(q),
       ),
     );
   }, [search, products]);
 
-  // ── CRUD ───────────────────────────────────────────────────────────────────
+  // ── CRUD ──────────────────────────────────────────────────────────────────
+
+  const handleOpenCreate = () => { setEditing(null); setFormOpen(true); };
+  const handleOpenEdit   = (p: Product) => { setEditing(p); setFormOpen(true); };
 
   const handleSave = async (input: CreateProductInput, id?: number) => {
     try {
@@ -63,9 +70,9 @@ export default function ProductsPage() {
         notifications.show({ color: "green", message: "Produit mis à jour." });
       } else {
         await cmd.createProduct(input);
-        notifications.show({ color: "green", message: "Produit créé." });
+        notifications.show({ color: "green", message: "Produit créé avec succès." });
       }
-      setModal(null);
+      setFormOpen(false);
       setEditing(null);
       loadProducts();
     } catch (e) {
@@ -73,191 +80,228 @@ export default function ProductsPage() {
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      await cmd.deleteProduct(id);
-      notifications.show({ color: "green", message: "Produit désactivé." });
-      setDeleting(null);
+      await cmd.deleteProduct(deleteTarget.id);
+      notifications.show({ color: "teal", message: "Produit désactivé." });
+      setDeleteTarget(null);
       loadProducts();
     } catch (e) {
       notifications.show({ color: "red", message: String(e) });
     }
   };
 
-  // ── Stock status ───────────────────────────────────────────────────────────
+  // ── Stock badge ───────────────────────────────────────────────────────────
 
   const stockBadge = (p: Product) => {
-    if (p.total_stock <= 0)                return <span className="badge-danger">Rupture</span>;
-    if (p.total_stock <= p.min_stock_alert) return <span className="badge-warn">Bas</span>;
-    return <span className="badge-ok">OK</span>;
+    if (p.total_stock <= 0)                return <Badge color="red"    variant="light" size="xs">Rupture</Badge>;
+    if (p.total_stock <= p.min_stock_alert) return <Badge color="orange" variant="light" size="xs">Bas</Badge>;
+    return                                         <Badge color="green"  variant="light" size="xs">OK</Badge>;
   };
 
-  return (
-    <div className="flex flex-col h-full p-6 gap-4">
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{t("products.title")}</h1>
-        <button
-          className="btn-primary gap-2"
-          onClick={() => { setEditing(null); setModal("create"); }}
-        >
-          <span>+</span> {t("products.add")}
-        </button>
-      </div>
+  // ── Stats ─────────────────────────────────────────────────────────────────
 
-      {/* ── Search bar ─────────────────────────────────────────────────────── */}
-      <input
-        type="text"
-        className="input max-w-sm"
-        placeholder={t("products.search")}
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        autoFocus
+  const alertCount   = products.filter(p => p.total_stock > 0 && p.total_stock <= p.min_stock_alert).length;
+  const ruptureCount = products.filter(p => p.total_stock <= 0 && p.is_active).length;
+
+  return (
+    <Stack gap="lg" p="lg" style={{ height: "100vh", overflow: "hidden" }}>
+
+      {/* ── Header ───────────────────────────────────────────────────── */}
+      <Group justify="space-between">
+        <Title order={2}>{t("products.title")}</Title>
+        <Button leftSection={<IconPlus size={16} />} onClick={handleOpenCreate}>
+          {t("products.add")}
+        </Button>
+      </Group>
+
+      {/* ── Search + stats ───────────────────────────────────────────── */}
+      <Group justify="space-between">
+        <TextInput
+          placeholder={t("products.search")}
+          leftSection={<IconSearch size={16} />}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{ maxWidth: 360 }}
+          autoFocus
+        />
+        <Group gap="xs">
+          <Text size="xs" c="dimmed">{products.length} produits</Text>
+          {alertCount > 0 && (
+            <Badge color="orange" variant="light" size="sm"
+              leftSection={<IconAlertTriangle size={10} />}>
+              {alertCount} alerte{alertCount > 1 ? "s" : ""} stock
+            </Badge>
+          )}
+          {ruptureCount > 0 && (
+            <Badge color="red" variant="light" size="sm">
+              {ruptureCount} rupture{ruptureCount > 1 ? "s" : ""}
+            </Badge>
+          )}
+        </Group>
+      </Group>
+
+      {/* ── Table ────────────────────────────────────────────────────── */}
+      {loading ? (
+        <Center style={{ flex: 1 }}>
+          <Loader size="lg" />
+        </Center>
+      ) : (
+        <Paper withBorder radius="md" style={{ flex: 1, overflow: "hidden" }}>
+          <ScrollArea style={{ height: "100%" }}>
+            <Table stickyHeader highlightOnHover withRowBorders>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Produit</Table.Th>
+                  <Table.Th>{t("products.gtin")}</Table.Th>
+                  <Table.Th>{t("products.category")}</Table.Th>
+                  <Table.Th style={{ textAlign: "right" }}>{t("products.sell_price")}</Table.Th>
+                  <Table.Th style={{ textAlign: "right" }}>{t("products.buy_price")}</Table.Th>
+                  <Table.Th style={{ textAlign: "center" }}>{t("products.stock")}</Table.Th>
+                  <Table.Th style={{ textAlign: "center" }}>Statut</Table.Th>
+                  <Table.Th style={{ width: 80 }} />
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {filtered.length === 0 ? (
+                  <Table.Tr>
+                    <Table.Td colSpan={8}>
+                      <Center py="xl">
+                        <Stack align="center" gap="xs" opacity={0.5}>
+                          <IconTag size={40} stroke={1} />
+                          <Text c="dimmed">Aucun produit trouvé</Text>
+                        </Stack>
+                      </Center>
+                    </Table.Td>
+                  </Table.Tr>
+                ) : (
+                  filtered.map((p) => (
+                    <Table.Tr
+                      key={p.id}
+                      style={{ opacity: p.is_active ? 1 : 0.45 }}
+                    >
+                      {/* Name */}
+                      <Table.Td>
+                        <Text fw={600} size="sm">{p.name_fr}</Text>
+                        {p.name_ar && (
+                          <Text size="xs" c="dimmed" style={{ direction: "rtl", textAlign: "right" }}>
+                            {p.name_ar}
+                          </Text>
+                        )}
+                      </Table.Td>
+
+                      {/* GTIN */}
+                      <Table.Td>
+                        <Text size="xs" ff="monospace" c="dimmed">
+                          {p.gtin ?? "—"}
+                        </Text>
+                      </Table.Td>
+
+                      {/* Category */}
+                      <Table.Td>
+                        <Text size="sm" c="dimmed">{p.category_name_fr ?? "—"}</Text>
+                      </Table.Td>
+
+                      {/* Sell price */}
+                      <Table.Td style={{ textAlign: "right" }}>
+                        <Text fw={600} size="sm" ff="monospace">
+                          {p.sell_price.toFixed(2)}
+                          <Text span size="xs" c="dimmed" fw={400}> DZD</Text>
+                        </Text>
+                      </Table.Td>
+
+                      {/* Buy price */}
+                      <Table.Td style={{ textAlign: "right" }}>
+                        <Text size="sm" ff="monospace" c="dimmed">
+                          {p.buy_price.toFixed(2)}
+                        </Text>
+                      </Table.Td>
+
+                      {/* Stock */}
+                      <Table.Td style={{ textAlign: "center" }}>
+                        <Text ff="monospace" size="sm">
+                          {p.total_stock % 1 === 0
+                            ? p.total_stock.toFixed(0)
+                            : p.total_stock.toFixed(2)}
+                          {p.unit_label_fr && (
+                            <Text span size="xs" c="dimmed"> {p.unit_label_fr}</Text>
+                          )}
+                        </Text>
+                      </Table.Td>
+
+                      {/* Status */}
+                      <Table.Td style={{ textAlign: "center" }}>
+                        {stockBadge(p)}
+                      </Table.Td>
+
+                      {/* Actions */}
+                      <Table.Td>
+                        <Group gap={4} justify="flex-end">
+                          <Tooltip label="Modifier" withArrow>
+                            <ActionIcon
+                              variant="subtle"
+                              color="blue"
+                              size="sm"
+                              onClick={() => handleOpenEdit(p)}
+                            >
+                              <IconPencil size={14} />
+                            </ActionIcon>
+                          </Tooltip>
+                          <Tooltip label="Désactiver" withArrow>
+                            <ActionIcon
+                              variant="subtle"
+                              color="red"
+                              size="sm"
+                              onClick={() => setDeleteTarget(p)}
+                              disabled={!p.is_active}
+                            >
+                              <IconTrash size={14} />
+                            </ActionIcon>
+                          </Tooltip>
+                        </Group>
+                      </Table.Td>
+                    </Table.Tr>
+                  ))
+                )}
+              </Table.Tbody>
+            </Table>
+          </ScrollArea>
+        </Paper>
+      )}
+
+      {/* ── Product form modal ───────────────────────────────────────── */}
+      <ProductFormModal
+        opened={formOpen}
+        product={editing}
+        onSave={handleSave}
+        onClose={() => { setFormOpen(false); setEditing(null); }}
       />
 
-      {/* ── Table ──────────────────────────────────────────────────────────── */}
-      {loading ? (
-        <div className="flex-1 flex items-center justify-center text-[var(--color-text-muted)]">
-          <span className="animate-pulse">Chargement…</span>
-        </div>
-      ) : (
-        <div className="card overflow-hidden p-0 flex-1 overflow-y-auto">
-          <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-[var(--color-surface-dim)] border-b border-[var(--color-border)]">
-              <tr className="text-xs uppercase tracking-wide text-[var(--color-text-muted)]">
-                <th className="text-start px-4 py-3">Produit</th>
-                <th className="text-start px-3 py-3">{t("products.gtin")}</th>
-                <th className="text-start px-3 py-3">{t("products.category")}</th>
-                <th className="text-end   px-3 py-3">{t("products.sell_price")}</th>
-                <th className="text-end   px-3 py-3">{t("products.buy_price")}</th>
-                <th className="text-center px-3 py-3">{t("products.stock")}</th>
-                <th className="text-center px-3 py-3">Statut</th>
-                <th className="px-3 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--color-border)]">
-              {filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="text-center py-16 text-[var(--color-text-muted)]">
-                    Aucun produit trouvé
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((p) => (
-                  <tr
-                    key={p.id}
-                    className={clsx(
-                      "hover:bg-[var(--color-surface-dim)] group transition-colors",
-                      !p.is_active && "opacity-50",
-                    )}
-                  >
-                    <td className="px-4 py-3">
-                      <p className="font-medium">{p.name_fr}</p>
-                      {p.name_ar && (
-                        <p className="text-xs text-[var(--color-text-muted)] text-right" dir="rtl">
-                          {p.name_ar}
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-3 py-3 font-mono text-xs">
-                      {p.gtin ?? <span className="text-[var(--color-text-muted)]">—</span>}
-                    </td>
-                    <td className="px-3 py-3 text-[var(--color-text-muted)]">
-                      {p.category_name_fr ?? "—"}
-                    </td>
-                    <td className="px-3 py-3 text-end font-semibold">
-                      {p.sell_price.toFixed(2)}
-                      <span className="text-xs font-normal ms-1 text-[var(--color-text-muted)]">DZD</span>
-                    </td>
-                    <td className="px-3 py-3 text-end text-[var(--color-text-muted)]">
-                      {p.buy_price.toFixed(2)}
-                    </td>
-                    <td className="px-3 py-3 text-center font-mono">
-                      {p.total_stock % 1 === 0
-                        ? p.total_stock.toFixed(0)
-                        : p.total_stock.toFixed(2)}
-                      {p.unit_label_fr && (
-                        <span className="ms-1 text-xs text-[var(--color-text-muted)]">
-                          {p.unit_label_fr}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-3 py-3 text-center">{stockBadge(p)}</td>
-                    <td className="px-3 py-3">
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity justify-end">
-                        <button
-                          className="btn-ghost text-xs py-1 px-2"
-                          onClick={() => { setEditing(p); setModal("edit"); }}
-                        >
-                          ✏️ {t("products.edit")}
-                        </button>
-                        <button
-                          className="btn-ghost text-xs py-1 px-2 text-[var(--color-danger-600)]"
-                          onClick={() => setDeleting(p.id)}
-                        >
-                          🗑
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* ── Stats bar ──────────────────────────────────────────────────────── */}
-      <div className="text-xs text-[var(--color-text-muted)] flex gap-6">
-        <span>{products.length} produits au total</span>
-        <span className="text-[var(--color-warn-600)]">
-          {products.filter((p) => p.total_stock > 0 && p.total_stock <= p.min_stock_alert).length} en alerte stock
-        </span>
-        <span className="text-[var(--color-danger-600)]">
-          {products.filter((p) => p.total_stock <= 0 && p.is_active).length} en rupture
-        </span>
-      </div>
-
-      {/* ── Modals ─────────────────────────────────────────────────────────── */}
-      {modal && (
-        <ProductFormModal
-          product={editing}
-          onSave={handleSave}
-          onClose={() => { setModal(null); setEditing(null); }}
-        />
-      )}
-
-      {deleting !== null && (
-        <ConfirmDeleteModal
-          onConfirm={() => handleDelete(deleting)}
-          onCancel={() => setDeleting(null)}
-        />
-      )}
-    </div>
-  );
-}
-
-// ─── Confirm Delete Modal ──────────────────────────────────────────────────────
-
-function ConfirmDeleteModal({
-  onConfirm,
-  onCancel,
-}: {
-  onConfirm: () => void;
-  onCancel:  () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="card w-full max-w-sm shadow-2xl">
-        <h3 className="font-bold text-lg mb-2">Désactiver ce produit ?</h3>
-        <p className="text-sm text-[var(--color-text-muted)] mb-5">
-          Le produit sera masqué de la caisse mais conservé dans l'historique des ventes.
-        </p>
-        <div className="flex gap-3 justify-end">
-          <button className="btn-ghost" onClick={onCancel}>Annuler</button>
-          <button className="btn-danger" onClick={onConfirm}>Désactiver</button>
-        </div>
-      </div>
-    </div>
+      {/* ── Delete confirm modal ─────────────────────────────────────── */}
+      <Modal
+        opened={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        title={<Text fw={700}>Désactiver ce produit ?</Text>}
+        size="sm"
+        centered
+        radius="md"
+      >
+        <Stack gap="md">
+          <Text size="sm" c="dimmed">
+            <strong>{deleteTarget?.name_fr}</strong> sera masqué de la caisse mais
+            conservé dans l'historique des ventes.
+          </Text>
+          <Group justify="flex-end">
+            <Button variant="subtle" color="gray" onClick={() => setDeleteTarget(null)}>
+              Annuler
+            </Button>
+            <Button color="red" onClick={handleDelete}>
+              Désactiver
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+    </Stack>
   );
 }
