@@ -85,6 +85,15 @@ export const listPrinters        = ():                          Promise<PrinterI
 export const printThermalReceipt = (data: ReceiptData, port: string): Promise<void>   => invoke("cmd_print_thermal_receipt", { data, port });
 
 // ─── Settings ────────────────────────────────────────────────────────────────
+//
+// NOTE on Rust serialisation:
+//   `AppSettings(pub HashMap<String,String>)` is a serde newtype wrapper.
+//   Serde serialises newtypes as the inner type, so the JSON is a plain
+//   object: { "shop_name_fr": "...", "shop_address": "...", ... }.
+//   There is NO outer { "0": {...} } wrapper — that was a previous bug.
 
-export const getSettings    = (): Promise<{ "0": AppSettings }>      => invoke<{ "0": AppSettings }>("cmd_get_settings");
-export const updateSettings = (updates: Partial<AppSettings>): Promise<void> => invoke("cmd_update_settings", { updates });
+export const getSettings    = ():                            Promise<AppSettings> =>
+  invoke<AppSettings>("cmd_get_settings");
+
+export const updateSettings = (updates: Partial<AppSettings>): Promise<void> =>
+  invoke("cmd_update_settings", { updates });

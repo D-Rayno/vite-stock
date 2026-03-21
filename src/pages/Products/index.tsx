@@ -8,11 +8,8 @@ import type { Product, CreateProductInput } from "@/types";
 import * as cmd from "@/lib/commands";
 import { ProductFormModal } from "./ProductFormModal";
 
-
-
 export default function ProductsPage() {
   const { t } = useTranslation();
-  
 
   const [products, setProducts]   = useState<Product[]>([]);
   const [filtered, setFiltered]   = useState<Product[]>([]);
@@ -24,6 +21,8 @@ export default function ProductsPage() {
 
   // ── Load ───────────────────────────────────────────────────────────────────
 
+  // `notifications` from Mantine is a stable module-level singleton —
+  // it does not need to appear in the useCallback dependency array.
   const loadProducts = useCallback(async () => {
     setLoading(true);
     try {
@@ -35,7 +34,7 @@ export default function ProductsPage() {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, []); // ← stable: no external reactive deps
 
   useEffect(() => { loadProducts(); }, [loadProducts]);
 

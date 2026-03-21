@@ -28,7 +28,6 @@ const EXPIRY_LABEL: Record<ReturnType<typeof getExpiryStatus>, string> = {
 
 export default function InventoryPage() {
   const { t } = useTranslation();
-  
 
   const [batches,    setBatches]   = useState<InventoryBatch[]>([]);
   const [alerts,     setAlerts]    = useState<InventoryBatch[]>([]);
@@ -37,6 +36,8 @@ export default function InventoryPage() {
   const [addModal,   setAddModal]  = useState(false);
   const [search,     setSearch]    = useState("");
 
+  // `notifications` from Mantine is a stable module-level singleton —
+  // it does not need to appear in the useCallback dependency array.
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -51,7 +52,7 @@ export default function InventoryPage() {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, []); // ← stable: no external reactive deps
 
   useEffect(() => { load(); }, [load]);
 
