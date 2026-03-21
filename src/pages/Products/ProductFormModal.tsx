@@ -3,9 +3,9 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Modal, Stack, Group, TextInput, NumberInput, Select,
-  Button, Text, Divider, Paper, Badge,
+  Button, Text, Divider, Paper, Badge, ScrollArea,
 } from "@mantine/core";
-import { IconTag, IconAlertCircle } from "@tabler/icons-react";
+import { IconTag } from "@tabler/icons-react";
 import type { Product, CreateProductInput } from "@/types";
 
 interface Props {
@@ -61,7 +61,6 @@ export function ProductFormModal({ opened, product, onSave, onClose }: Props) {
   const [errors, setErrors] = useState<Partial<Record<keyof CreateProductInput, string>>>({});
   const [saving, setSaving] = useState(false);
 
-  // Populate form from product prop
   useEffect(() => {
     if (opened) {
       setErrors({});
@@ -104,12 +103,11 @@ export function ProductFormModal({ opened, product, onSave, onClose }: Props) {
     }
   };
 
-  // Margin calculation
-  const margin     = form.sell_price > 0 && form.buy_price > 0
+  const margin    = form.sell_price > 0 && form.buy_price > 0
     ? form.sell_price - form.buy_price
     : null;
-  const marginPct  = margin !== null && form.buy_price > 0
-    ? ((margin / form.buy_price) * 100)
+  const marginPct = margin !== null && form.buy_price > 0
+    ? (margin / form.buy_price) * 100
     : null;
 
   return (
@@ -127,152 +125,153 @@ export function ProductFormModal({ opened, product, onSave, onClose }: Props) {
       size="lg"
       radius="md"
       centered
-      scrollAreaComponent={Modal.NativeScrollArea}
+      // ── Mantine v7: use ScrollArea as the scroll container directly ──────
+      // Modal.NativeScrollArea was removed; wrap content in ScrollArea instead.
       overlayProps={{ backgroundOpacity: 0.4, blur: 2 }}
     >
-      <Stack gap="md">
+      {/* ScrollArea keeps the modal body scrollable on small screens */}
+      <ScrollArea.Autosize mah="80vh">
+        <Stack gap="md" pr={4}>
 
-        {/* ── Barcode ────────────────────────────────────────────────── */}
-        <TextInput
-          label={t("products.gtin")}
-          placeholder="Ex: 6191234567890"
-          value={form.gtin ?? ""}
-          onChange={(e) => set("gtin", e.target.value || null)}
-          ff="monospace"
-        />
-
-        {/* ── Names ──────────────────────────────────────────────────── */}
-        <Group grow align="flex-start">
+          {/* ── Barcode ────────────────────────────────────────────────── */}
           <TextInput
-            label={
-              <Text size="sm" fw={500}>
-                {t("products.name_fr")} <Text span c="red">*</Text>
-              </Text>
-            }
-            placeholder="Nom en français"
-            value={form.name_fr}
-            onChange={(e) => set("name_fr", e.target.value)}
-            error={errors.name_fr}
-            autoFocus
+            label={t("products.gtin")}
+            placeholder="Ex: 6191234567890"
+            value={form.gtin ?? ""}
+            onChange={(e) => set("gtin", e.target.value || null)}
+            ff="monospace"
           />
-          <TextInput
-            label={
-              <Text size="sm" fw={500} style={{ direction: "rtl" }}>
-                {t("products.name_ar")}
-              </Text>
-            }
-            placeholder="الاسم بالعربية"
-            value={form.name_ar}
-            onChange={(e) => set("name_ar", e.target.value)}
-            styles={{ input: { textAlign: "right", direction: "rtl" } }}
-          />
-        </Group>
 
-        {/* ── Category + Unit ────────────────────────────────────────── */}
-        <Group grow>
-          <Select
-            label={t("products.category")}
-            data={CATEGORY_DATA}
-            value={String(form.category_id ?? 1)}
-            onChange={(v) => set("category_id", v ? parseInt(v) : null)}
-            searchable
-          />
-          <Select
-            label={t("products.unit")}
-            data={UNIT_DATA}
-            value={String(form.unit_id ?? 1)}
-            onChange={(v) => set("unit_id", v ? parseInt(v) : null)}
-          />
-        </Group>
+          {/* ── Names ──────────────────────────────────────────────────── */}
+          <Group grow align="flex-start">
+            <TextInput
+              label={
+                <Text size="sm" fw={500}>
+                  {t("products.name_fr")} <Text span c="red">*</Text>
+                </Text>
+              }
+              placeholder="Nom en français"
+              value={form.name_fr}
+              onChange={(e) => set("name_fr", e.target.value)}
+              error={errors.name_fr}
+              autoFocus
+            />
+            <TextInput
+              label={
+                <Text size="sm" fw={500} style={{ direction: "rtl" }}>
+                  {t("products.name_ar")}
+                </Text>
+              }
+              placeholder="الاسم بالعربية"
+              value={form.name_ar}
+              onChange={(e) => set("name_ar", e.target.value)}
+              styles={{ input: { textAlign: "right", direction: "rtl" } }}
+            />
+          </Group>
 
-        {/* ── Prices + VAT ───────────────────────────────────────────── */}
-        <Group grow align="flex-start">
-          <NumberInput
-            label={
-              <Text size="sm" fw={500}>
-                {t("products.sell_price")} <Text span c="red">*</Text>
-              </Text>
-            }
-            value={form.sell_price}
-            onChange={(v) => set("sell_price", typeof v === "number" ? v : 0)}
-            min={0}
-            step={10}
-            decimalScale={2}
-            fixedDecimalScale
-            rightSection={<Text size="xs" c="dimmed" pr={4}>DZD</Text>}
-            rightSectionWidth={40}
-            error={errors.sell_price}
-          />
-          <NumberInput
-            label={t("products.buy_price")}
-            value={form.buy_price}
-            onChange={(v) => set("buy_price", typeof v === "number" ? v : 0)}
-            min={0}
-            step={10}
-            decimalScale={2}
-            fixedDecimalScale
-            rightSection={<Text size="xs" c="dimmed" pr={4}>DZD</Text>}
-            rightSectionWidth={40}
-            error={errors.buy_price}
-          />
-          <Select
-            label={t("products.vat_rate")}
-            data={VAT_DATA}
-            value={String(form.vat_rate)}
-            onChange={(v) => set("vat_rate", v ? parseFloat(v) : 0.19)}
-          />
-        </Group>
+          {/* ── Category + Unit ────────────────────────────────────────── */}
+          <Group grow>
+            <Select
+              label={t("products.category")}
+              data={CATEGORY_DATA}
+              value={String(form.category_id ?? 1)}
+              onChange={(v) => set("category_id", v ? parseInt(v) : null)}
+              searchable
+            />
+            <Select
+              label={t("products.unit")}
+              data={UNIT_DATA}
+              value={String(form.unit_id ?? 1)}
+              onChange={(v) => set("unit_id", v ? parseInt(v) : null)}
+            />
+          </Group>
 
-        {/* ── Margin indicator ───────────────────────────────────────── */}
-        {margin !== null && (
-          <Paper
-            p="sm"
-            radius="md"
-            style={{ background: "var(--mantine-color-blue-0)", border: "1px solid var(--mantine-color-blue-2)" }}
-          >
-            <Group gap="sm">
-              <Text size="sm" c="dimmed">Marge brute :</Text>
-              <Badge
-                color={margin > 0 ? "green" : "red"}
-                variant="light"
-                ff="monospace"
-              >
-                {margin.toFixed(2)} DZD
-              </Badge>
-              {marginPct !== null && (
-                <Badge
-                  color={marginPct > 0 ? "green" : "red"}
-                  variant="light"
-                >
-                  {marginPct.toFixed(1)}%
+          {/* ── Prices + VAT ───────────────────────────────────────────── */}
+          <Group grow align="flex-start">
+            <NumberInput
+              label={
+                <Text size="sm" fw={500}>
+                  {t("products.sell_price")} <Text span c="red">*</Text>
+                </Text>
+              }
+              value={form.sell_price}
+              onChange={(v) => set("sell_price", typeof v === "number" ? v : 0)}
+              min={0}
+              step={10}
+              decimalScale={2}
+              fixedDecimalScale
+              rightSection={<Text size="xs" c="dimmed" pr={4}>DZD</Text>}
+              rightSectionWidth={40}
+              error={errors.sell_price}
+            />
+            <NumberInput
+              label={t("products.buy_price")}
+              value={form.buy_price}
+              onChange={(v) => set("buy_price", typeof v === "number" ? v : 0)}
+              min={0}
+              step={10}
+              decimalScale={2}
+              fixedDecimalScale
+              rightSection={<Text size="xs" c="dimmed" pr={4}>DZD</Text>}
+              rightSectionWidth={40}
+              error={errors.buy_price}
+            />
+            <Select
+              label={t("products.vat_rate")}
+              data={VAT_DATA}
+              value={String(form.vat_rate)}
+              onChange={(v) => set("vat_rate", v ? parseFloat(v) : 0.19)}
+            />
+          </Group>
+
+          {/* ── Margin indicator ───────────────────────────────────────── */}
+          {margin !== null && (
+            <Paper
+              p="sm"
+              radius="md"
+              style={{
+                background: "var(--mantine-color-blue-0)",
+                border: "1px solid var(--mantine-color-blue-2)",
+              }}
+            >
+              <Group gap="sm">
+                <Text size="sm" c="dimmed">Marge brute :</Text>
+                <Badge color={margin >= 0 ? "green" : "red"} variant="light" ff="monospace">
+                  {margin.toFixed(2)} DZD
                 </Badge>
-              )}
-            </Group>
-          </Paper>
-        )}
+                {marginPct !== null && (
+                  <Badge color={marginPct >= 0 ? "green" : "red"} variant="light">
+                    {marginPct.toFixed(1)}%
+                  </Badge>
+                )}
+              </Group>
+            </Paper>
+          )}
 
-        {/* ── Min stock alert ────────────────────────────────────────── */}
-        <NumberInput
-          label={t("products.min_stock")}
-          description="Une alerte apparaît quand le stock descend sous ce seuil."
-          value={form.min_stock_alert}
-          onChange={(v) => set("min_stock_alert", typeof v === "number" ? v : 5)}
-          min={0}
-          step={1}
-          style={{ maxWidth: 220 }}
-        />
+          {/* ── Min stock alert ────────────────────────────────────────── */}
+          <NumberInput
+            label={t("products.min_stock")}
+            description="Une alerte apparaît quand le stock descend sous ce seuil."
+            value={form.min_stock_alert}
+            onChange={(v) => set("min_stock_alert", typeof v === "number" ? v : 5)}
+            min={0}
+            step={1}
+            style={{ maxWidth: 220 }}
+          />
 
-        {/* ── Actions ────────────────────────────────────────────────── */}
-        <Divider />
-        <Group justify="flex-end">
-          <Button variant="subtle" color="gray" onClick={onClose}>
-            {t("products.cancel")}
-          </Button>
-          <Button onClick={handleSubmit} loading={saving}>
-            {t("products.save")}
-          </Button>
-        </Group>
-      </Stack>
+          {/* ── Actions ────────────────────────────────────────────────── */}
+          <Divider />
+          <Group justify="flex-end" pb="xs">
+            <Button variant="subtle" color="gray" onClick={onClose}>
+              {t("products.cancel")}
+            </Button>
+            <Button onClick={handleSubmit} loading={saving}>
+              {t("products.save")}
+            </Button>
+          </Group>
+
+        </Stack>
+      </ScrollArea.Autosize>
     </Modal>
   );
 }

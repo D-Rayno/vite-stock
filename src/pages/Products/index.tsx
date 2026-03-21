@@ -18,13 +18,13 @@ import { ProductFormModal } from "./ProductFormModal";
 export default function ProductsPage() {
   const { t } = useTranslation();
 
-  const [products,    setProducts]    = useState<Product[]>([]);
-  const [filtered,    setFiltered]    = useState<Product[]>([]);
-  const [search,      setSearch]      = useState("");
-  const [loading,     setLoading]     = useState(true);
-  const [formOpen,    setFormOpen]    = useState(false);
-  const [editing,     setEditing]     = useState<Product | null>(null);
-  const [deleteTarget,setDeleteTarget]= useState<Product | null>(null);
+  const [products,     setProducts]     = useState<Product[]>([]);
+  const [filtered,     setFiltered]     = useState<Product[]>([]);
+  const [search,       setSearch]       = useState("");
+  const [loading,      setLoading]      = useState(true);
+  const [formOpen,     setFormOpen]     = useState(false);
+  const [editing,      setEditing]      = useState<Product | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
 
   // ── Load ──────────────────────────────────────────────────────────────────
 
@@ -65,8 +65,31 @@ export default function ProductsPage() {
 
   const handleSave = async (input: CreateProductInput, id?: number) => {
     try {
-      if (id) {
-        await cmd.updateProduct({ ...input, id, is_active: true, total_stock: 0, created_at: "" });
+      if (id && editing) {
+        // cmd.updateProduct expects the full Product shape.
+        // We preserve the read-only fields (category_name_fr, unit_label_fr,
+        // total_stock, created_at) from the original editing record so that
+        // the TypeScript Product type is fully satisfied.
+        const updated: Product = {
+          // Read-only / computed fields — keep original values
+          id,
+          is_active:        editing.is_active,
+          total_stock:      editing.total_stock,
+          created_at:       editing.created_at,
+          category_name_fr: editing.category_name_fr,
+          unit_label_fr:    editing.unit_label_fr,
+          // Editable fields from the form
+          gtin:             input.gtin,
+          name_fr:          input.name_fr,
+          name_ar:          input.name_ar,
+          category_id:      input.category_id,
+          unit_id:          input.unit_id,
+          sell_price:       input.sell_price,
+          buy_price:        input.buy_price,
+          vat_rate:         input.vat_rate,
+          min_stock_alert:  input.min_stock_alert,
+        };
+        await cmd.updateProduct(updated);
         notifications.show({ color: "green", message: "Produit mis à jour." });
       } else {
         await cmd.createProduct(input);
@@ -95,14 +118,16 @@ export default function ProductsPage() {
   // ── Stock badge ───────────────────────────────────────────────────────────
 
   const stockBadge = (p: Product) => {
-    if (p.total_stock <= 0)                return <Badge color="red"    variant="light" size="xs">Rupture</Badge>;
-    if (p.total_stock <= p.min_stock_alert) return <Badge color="orange" variant="light" size="xs">Bas</Badge>;
-    return                                         <Badge color="green"  variant="light" size="xs">OK</Badge>;
+    if (p.total_stock <= 0)
+      return <Badge color="red"    variant="light" size="xs">Rupture</Badge>;
+    if (p.total_stock <= p.min_stock_alert)
+      return <Badge color="orange" variant="light" size="xs">Bas</Badge>;
+    return   <Badge color="green"  variant="light" size="xs">OK</Badge>;
   };
 
   // ── Stats ─────────────────────────────────────────────────────────────────
 
-  const alertCount   = products.filter(p => p.total_stock > 0 && p.total_stock <= p.min_stock_alert).length;
+  const alertCount   = products.filter(p => p.total_stock > 0  && p.total_stock <= p.min_stock_alert).length;
   const ruptureCount = products.filter(p => p.total_stock <= 0 && p.is_active).length;
 
   return (
@@ -129,8 +154,12 @@ export default function ProductsPage() {
         <Group gap="xs">
           <Text size="xs" c="dimmed">{products.length} produits</Text>
           {alertCount > 0 && (
-            <Badge color="orange" variant="light" size="sm"
-              leftSection={<IconAlertTriangle size={10} />}>
+            <Badge
+              color="orange"
+              variant="light"
+              size="sm"
+              leftSection={<IconAlertTriangle size={10} />}
+            >
               {alertCount} alerte{alertCount > 1 ? "s" : ""} stock
             </Badge>
           )}
@@ -185,7 +214,11 @@ export default function ProductsPage() {
                       <Table.Td>
                         <Text fw={600} size="sm">{p.name_fr}</Text>
                         {p.name_ar && (
-                          <Text size="xs" c="dimmed" style={{ direction: "rtl", textAlign: "right" }}>
+                          <Text
+                            size="xs"
+                            c="dimmed"
+                            style={{ direction: "rtl", textAlign: "right" }}
+                          >
                             {p.name_ar}
                           </Text>
                         )}
@@ -289,8 +322,8 @@ export default function ProductsPage() {
       >
         <Stack gap="md">
           <Text size="sm" c="dimmed">
-            <strong>{deleteTarget?.name_fr}</strong> sera masqué de la caisse mais
-            conservé dans l'historique des ventes.
+            <Text span fw={600}>{deleteTarget?.name_fr}</Text> sera masqué de la caisse
+            mais conservé dans l'historique des ventes.
           </Text>
           <Group justify="flex-end">
             <Button variant="subtle" color="gray" onClick={() => setDeleteTarget(null)}>
