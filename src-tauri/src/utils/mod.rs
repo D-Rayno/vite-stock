@@ -1,5 +1,6 @@
 // src-tauri/src/utils/mod.rs
 pub mod escpos;
+pub mod pdf;
 
 use chrono::Utc;
 

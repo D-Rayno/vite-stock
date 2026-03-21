@@ -1,4 +1,5 @@
 // src-tauri/src/commands/mod.rs
+pub mod a4print;
 pub mod alerts;
 pub mod backup;
 pub mod dain;
