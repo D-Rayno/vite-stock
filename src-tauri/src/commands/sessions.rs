@@ -1,8 +1,8 @@
 // src-tauri/src/commands/sessions.rs
 //! Cashier session management (till open/close, float reconciliation).
-
-use rusqlite::params;
-use serde::{Deserialize, Serialize};
+// FIX: `use rusqlite::OptionalExtension` — needed for .optional() on query_row.
+use rusqlite::{params, OptionalExtension};
+use serde::Serialize;
 use tauri::{command, State};
 
 use crate::AppState;
@@ -25,7 +25,6 @@ pub struct CashierSession {
     pub status:           String,
 }
 
-/// Open a new cashier session (shift start).
 #[command]
 pub async fn cmd_open_session(
     state:         State<'_, AppState>,
@@ -35,11 +34,10 @@ pub async fn cmd_open_session(
     let db   = state.db.lock().unwrap();
     let conn = &db.0;
 
-    // Only one session per cashier can be open at a time
     let open_count: i64 = conn.query_row(
         "SELECT COUNT(*) FROM cashier_sessions WHERE cashier_name = ?1 AND status = 'open'",
         params![cashier_name],
-        |r| r.get(0),
+        |r: &rusqlite::Row<'_>| r.get::<_, i64>(0),
     ).unwrap_or(0);
 
     if open_count > 0 {
@@ -56,7 +54,6 @@ pub async fn cmd_open_session(
     Ok(conn.last_insert_rowid())
 }
 
-/// Close the active session for a cashier.
 #[command]
 pub async fn cmd_close_session(
     state:            State<'_, AppState>,
@@ -80,7 +77,6 @@ pub async fn cmd_close_session(
     get_session(conn, session_id)
 }
 
-/// Get the currently open session (if any).
 #[command]
 pub async fn cmd_get_active_session(
     state:        State<'_, AppState>,
@@ -89,6 +85,7 @@ pub async fn cmd_get_active_session(
     let db   = state.db.lock().unwrap();
     let conn = &db.0;
 
+    // OptionalExtension is now in scope — .optional() compiles correctly.
     let row = conn.query_row(
         "SELECT id, cashier_name, opening_float, closing_declared,
                 total_sales_ttc, total_cash_sales, total_cib_sales, total_dain_sales,
@@ -98,12 +95,11 @@ pub async fn cmd_get_active_session(
          ORDER BY opened_at DESC LIMIT 1",
         params![cashier_name],
         map_session_row,
-    ).optional().map_err(|e| e.to_string())?;
+    ).optional().map_err(|e: rusqlite::Error| e.to_string())?;
 
     Ok(row)
 }
 
-/// List recent sessions (for manager review).
 #[command]
 pub async fn cmd_list_sessions(
     state: State<'_, AppState>,

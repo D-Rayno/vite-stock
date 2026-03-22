@@ -1,5 +1,8 @@
 // src-tauri/src/commands/products.rs
-use rusqlite::params;
+// FIX: add `use rusqlite::OptionalExtension;` — the `.optional()` method on
+// query_row results is provided by this trait; without it in scope the compiler
+// reports "method not found" even though it is implemented.
+use rusqlite::{params, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use tauri::{command, State};
 
@@ -22,15 +25,12 @@ pub struct ProductRow {
     pub vat_rate:         f64,
     pub min_stock_alert:  i64,
     pub is_active:        bool,
-    /// Aggregated available quantity across all batches.
     pub total_stock:      f64,
     pub created_at:       String,
 }
 
-/// Returned by `lookup_product` — includes the FEFO-selected batch.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProductLookupResult {
-    // ── Product fields ────────────────────────────────────────────────────
     pub id:            i64,
     pub gtin:          Option<String>,
     pub name_fr:       String,
@@ -39,11 +39,9 @@ pub struct ProductLookupResult {
     pub vat_rate:      f64,
     pub unit_label_fr: Option<String>,
     pub total_stock:   f64,
-    // ── FEFO batch fields (null if no batch / no stock) ───────────────────
-    pub batch_id:      Option<i64>,
-    pub batch_qty:     Option<f64>,
-    pub expiry_date:   Option<String>,
-    /// days_until_expiry: negative = already expired, None = no expiry on batch
+    pub batch_id:          Option<i64>,
+    pub batch_qty:         Option<f64>,
+    pub expiry_date:       Option<String>,
     pub days_until_expiry: Option<i64>,
 }
 
@@ -77,10 +75,6 @@ pub struct UpdateProductInput {
 
 // ─── Commands ────────────────────────────────────────────────────────────────
 
-/// Look up a product by GTIN (barcode) scan.
-/// Applies FEFO: joins the batch with the earliest non-null expiry date first,
-/// falling back to batches with no expiry date.
-/// Returns `None` if no active product matches the GTIN.
 #[command]
 pub async fn cmd_lookup_product(
     state: State<'_, AppState>,
@@ -95,25 +89,23 @@ pub async fn cmd_lookup_product(
                 u.label_fr AS unit_label_fr,
                 COALESCE(SUM(ib2.quantity), 0) AS total_stock
          FROM products p
-         LEFT JOIN units u            ON u.id = p.unit_id
+         LEFT JOIN units u             ON u.id = p.unit_id
          LEFT JOIN inventory_batches ib2 ON ib2.product_id = p.id
          WHERE p.gtin = ?1 AND p.is_active = 1
          GROUP BY p.id
          LIMIT 1",
         params![gtin],
-        |r| {
-            Ok((
-                r.get::<_, i64>(0)?,
-                r.get::<_, Option<String>>(1)?,
-                r.get::<_, String>(2)?,
-                r.get::<_, String>(3)?,
-                r.get::<_, f64>(4)?,
-                r.get::<_, f64>(5)?,
-                r.get::<_, Option<String>>(6)?,
-                r.get::<_, f64>(7)?,
-            ))
-        },
-    ).optional().map_err(|e| e.to_string())?;
+        |r| Ok((
+            r.get::<_, i64>(0)?,
+            r.get::<_, Option<String>>(1)?,
+            r.get::<_, String>(2)?,
+            r.get::<_, String>(3)?,
+            r.get::<_, f64>(4)?,
+            r.get::<_, f64>(5)?,
+            r.get::<_, Option<String>>(6)?,
+            r.get::<_, f64>(7)?,
+        )),
+    ).optional().map_err(|e: rusqlite::Error| e.to_string())?;
 
     let Some((pid, p_gtin, name_fr, name_ar, sell_price, vat_rate, unit_label_fr, total_stock))
         = product_opt
@@ -121,8 +113,7 @@ pub async fn cmd_lookup_product(
         return Ok(None);
     };
 
-    // Step 2: FEFO — pick the batch expiring soonest (with stock > 0).
-    // Batches with a real expiry_date come before NULL-expiry batches.
+    // Step 2: FEFO — pick the batch expiring soonest.
     let batch_opt = conn.query_row(
         "SELECT ib.id, ib.quantity, ib.expiry_date,
                 CASE WHEN ib.expiry_date IS NOT NULL THEN
@@ -131,8 +122,8 @@ pub async fn cmd_lookup_product(
          FROM inventory_batches ib
          WHERE ib.product_id = ?1 AND ib.quantity > 0
          ORDER BY
-             CASE WHEN ib.expiry_date IS NULL THEN 1 ELSE 0 END ASC,  -- dated first
-             ib.expiry_date ASC                                         -- then soonest
+             CASE WHEN ib.expiry_date IS NULL THEN 1 ELSE 0 END ASC,
+             ib.expiry_date ASC
          LIMIT 1",
         params![pid],
         |r| Ok((
@@ -141,25 +132,16 @@ pub async fn cmd_lookup_product(
             r.get::<_, Option<String>>(2)?,
             r.get::<_, Option<i64>>(3)?,
         )),
-    ).optional().map_err(|e| e.to_string())?;
+    ).optional().map_err(|e: rusqlite::Error| e.to_string())?;
 
     let (batch_id, batch_qty, expiry_date, days_until_expiry) = batch_opt
         .map(|(id, qty, exp, days)| (Some(id), Some(qty), exp, days))
         .unwrap_or((None, None, None, None));
 
     Ok(Some(ProductLookupResult {
-        id: pid,
-        gtin: p_gtin,
-        name_fr,
-        name_ar,
-        sell_price,
-        vat_rate,
-        unit_label_fr,
-        total_stock,
-        batch_id,
-        batch_qty,
-        expiry_date,
-        days_until_expiry,
+        id: pid, gtin: p_gtin, name_fr, name_ar,
+        sell_price, vat_rate, unit_label_fr, total_stock,
+        batch_id, batch_qty, expiry_date, days_until_expiry,
     }))
 }
 
@@ -169,13 +151,12 @@ pub async fn cmd_get_products(state: State<'_, AppState>) -> Result<Vec<ProductR
     let conn = &db.0;
 
     let mut stmt = conn.prepare("
-        SELECT
-            p.id, p.gtin, p.name_fr, p.name_ar,
-            p.category_id, c.name_fr AS category_name_fr,
-            p.unit_id,     u.label_fr AS unit_label_fr,
-            p.sell_price, p.buy_price, p.vat_rate,
-            p.min_stock_alert, p.is_active, p.created_at,
-            COALESCE(SUM(ib.quantity), 0) AS total_stock
+        SELECT p.id, p.gtin, p.name_fr, p.name_ar,
+               p.category_id, c.name_fr AS category_name_fr,
+               p.unit_id,     u.label_fr AS unit_label_fr,
+               p.sell_price, p.buy_price, p.vat_rate,
+               p.min_stock_alert, p.is_active, p.created_at,
+               COALESCE(SUM(ib.quantity), 0) AS total_stock
         FROM products p
         LEFT JOIN categories c ON c.id = p.category_id
         LEFT JOIN units u      ON u.id = p.unit_id
@@ -217,13 +198,12 @@ pub async fn cmd_search_products(
     let pattern = format!("%{}%", query.to_lowercase());
 
     let mut stmt = conn.prepare("
-        SELECT
-            p.id, p.gtin, p.name_fr, p.name_ar,
-            p.category_id, c.name_fr,
-            p.unit_id,     u.label_fr,
-            p.sell_price, p.buy_price, p.vat_rate,
-            p.min_stock_alert, p.is_active, p.created_at,
-            COALESCE(SUM(ib.quantity), 0) AS total_stock
+        SELECT p.id, p.gtin, p.name_fr, p.name_ar,
+               p.category_id, c.name_fr,
+               p.unit_id,     u.label_fr,
+               p.sell_price, p.buy_price, p.vat_rate,
+               p.min_stock_alert, p.is_active, p.created_at,
+               COALESCE(SUM(ib.quantity), 0) AS total_stock
         FROM products p
         LEFT JOIN categories c ON c.id = p.category_id
         LEFT JOIN units u      ON u.id = p.unit_id
@@ -267,24 +247,18 @@ pub async fn cmd_create_product(
 ) -> Result<i64, String> {
     let db = state.db.lock().unwrap();
     let conn = &db.0;
-
     conn.execute(
         "INSERT INTO products (gtin, name_fr, name_ar, category_id, unit_id,
                                sell_price, buy_price, vat_rate, min_stock_alert)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         params![
-            input.gtin,
-            input.name_fr,
-            input.name_ar,
-            input.category_id,
-            input.unit_id,
-            input.sell_price,
-            input.buy_price,
+            input.gtin, input.name_fr, input.name_ar,
+            input.category_id, input.unit_id,
+            input.sell_price, input.buy_price,
             input.vat_rate.unwrap_or(0.19),
             input.min_stock_alert.unwrap_or(5),
         ],
     ).map_err(|e| e.to_string())?;
-
     Ok(conn.last_insert_rowid())
 }
 
@@ -295,7 +269,6 @@ pub async fn cmd_update_product(
 ) -> Result<(), String> {
     let db = state.db.lock().unwrap();
     let conn = &db.0;
-
     conn.execute(
         "UPDATE products
          SET gtin=?1, name_fr=?2, name_ar=?3, category_id=?4, unit_id=?5,
@@ -303,20 +276,12 @@ pub async fn cmd_update_product(
              is_active=?10
          WHERE id=?11",
         params![
-            input.gtin,
-            input.name_fr,
-            input.name_ar,
-            input.category_id,
-            input.unit_id,
-            input.sell_price,
-            input.buy_price,
-            input.vat_rate,
-            input.min_stock_alert,
-            input.is_active as i64,
-            input.id,
+            input.gtin, input.name_fr, input.name_ar,
+            input.category_id, input.unit_id,
+            input.sell_price, input.buy_price, input.vat_rate,
+            input.min_stock_alert, input.is_active as i64, input.id,
         ],
     ).map_err(|e| e.to_string())?;
-
     Ok(())
 }
 
@@ -327,7 +292,6 @@ pub async fn cmd_delete_product(
 ) -> Result<(), String> {
     let db = state.db.lock().unwrap();
     let conn = &db.0;
-    // Soft-delete: set is_active = 0 to preserve historical transaction records.
     conn.execute(
         "UPDATE products SET is_active = 0 WHERE id = ?1",
         params![id],
