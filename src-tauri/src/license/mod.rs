@@ -19,16 +19,23 @@ pub use hwid::compute_hwid;
 // ─── Feature flags ────────────────────────────────────────────────────────────
 
 pub mod features {
+    #[allow(dead_code)]
     pub const POS_BASIC:          u32 = 1 << 0;
+    #[allow(dead_code)]
     pub const INVENTORY_MGMT:     u32 = 1 << 1;
     pub const THERMAL_PRINT:      u32 = 1 << 2;
     pub const DAIN_LEDGER:        u32 = 1 << 3;
     pub const A4_REPORTS:         u32 = 1 << 4;
+    #[allow(dead_code)]
     pub const MULTI_CART:         u32 = 1 << 5;
+    #[allow(dead_code)]
     pub const ADVANCED_ANALYTICS: u32 = 1 << 6;
 
+    #[allow(dead_code)]
     pub const TIER_BASIC:        u32 = POS_BASIC;
+    #[allow(dead_code)]
     pub const TIER_PROFESSIONAL: u32 = POS_BASIC | INVENTORY_MGMT | THERMAL_PRINT;
+    #[allow(dead_code)]
     pub const TIER_ENTERPRISE:   u32 = TIER_PROFESSIONAL
         | DAIN_LEDGER | A4_REPORTS | MULTI_CART | ADVANCED_ANALYTICS;
 }

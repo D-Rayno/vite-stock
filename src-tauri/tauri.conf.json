@@ -5,7 +5,7 @@
   "identifier": "com.rayno.vite-stock",
   "build": {
     "frontendDist": "../public",
-    "devUrl": "http://localhost:5173",
+    "devUrl": "http://localhost:1420",
     "beforeDevCommand": "pnpm dev",
     "beforeBuildCommand": "pnpm build"
   },
@@ -59,13 +59,6 @@
   "plugins": {
     "shell": {
       "open": false
-    },
-    "dialog": {},
-    "notification": {},
-    "fs": {
-      "scope": {
-        "allow": ["$APPDATA/**", "$DOCUMENT/**"]
-      }
     }
   }
 }

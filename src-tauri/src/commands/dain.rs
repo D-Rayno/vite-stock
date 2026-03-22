@@ -1,7 +1,7 @@
 // src-tauri/src/commands/dain.rs
 //! Dain (customer credit) commands — gated by Enterprise feature flag.
 use rusqlite::params;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tauri::{command, State};
 use crate::{license::features, AppState};
 

@@ -17,7 +17,7 @@
 mod background;
 mod commands;
 mod db;
-mod license;
+pub mod license;
 mod utils;
 
 use std::sync::Mutex;

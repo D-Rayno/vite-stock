@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600&display=swap");
+
 /* src/styles/globals.css
    Import order:
    1. Mantine base — CSS variables + component resets (CSS Modules, no Tailwind conflict)
@@ -54,9 +56,6 @@
   --font-mono:    "JetBrains Mono", "Consolas", monospace;
 }
 
-/* ─── Google Fonts import ────────────────────────────────────────────────── */
-@import url("https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600&display=swap");
-
 /* ─── Base / Reset ───────────────────────────────────────────────────────── */
 *, *::before, *::after {
   box-sizing: border-box;
@@ -88,78 +87,106 @@ html {
   outline-offset: 2px;
 }
 
-/* ─── Utility classes (Tailwind v4 @layer) ───────────────────────────────── */
-@layer components {
-  /* Card */
-  .card {
-    background:    var(--color-surface);
-    border:        1px solid var(--color-border);
-    border-radius: var(--radius-card);
-    padding:       1.25rem;
-    box-shadow:    0 1px 3px 0 rgb(0 0 0 / 0.04);
-  }
+/* ─── Utility classes (Tailwind v4 @utility) ─────────────────────────────── */
+@utility card {
+  background:    var(--color-surface);
+  border:        1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding:       1.25rem;
+  box-shadow:    0 1px 3px 0 rgb(0 0 0 / 0.04);
+}
 
-  /* Primary button */
-  .btn-primary {
-    display:        inline-flex;
-    align-items:    center;
-    justify-content:center;
-    gap:            0.4rem;
-    padding:        0.5rem 1.25rem;
-    background:     var(--color-brand-600);
-    color:          #fff;
-    border-radius:  var(--radius-btn);
-    font-weight:    600;
-    font-size:      0.875rem;
-    transition:     background 150ms;
-    cursor:         pointer;
-    border:         none;
-  }
-  .btn-primary:hover  { background: var(--color-brand-500); }
-  .btn-primary:active { background: var(--color-brand-700); }
-  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+@utility btn-primary {
+  display:        inline-flex;
+  align-items:    center;
+  justify-content:center;
+  gap:            0.4rem;
+  padding:        0.5rem 1.25rem;
+  background:     var(--color-brand-600);
+  color:          #fff;
+  border-radius:  var(--radius-btn);
+  font-weight:    600;
+  font-size:      0.875rem;
+  transition:     background 150ms;
+  cursor:         pointer;
+  border:         none;
 
-  /* Danger button */
-  .btn-danger {
-    @apply btn-primary;
-    background: var(--color-danger-600);
+  &:hover {
+    background: var(--color-brand-500);
   }
-  .btn-danger:hover { background: #b91c1c; }
+  &:active {
+    background: var(--color-brand-700);
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
 
-  /* Ghost button */
-  .btn-ghost {
-    display:        inline-flex;
-    align-items:    center;
-    gap:            0.4rem;
-    padding:        0.5rem 1.25rem;
-    border:         1px solid var(--color-border);
-    border-radius:  var(--radius-btn);
-    background:     transparent;
-    font-size:      0.875rem;
-    font-weight:    500;
-    cursor:         pointer;
-    transition:     background 150ms, border-color 150ms;
+@utility btn-danger {
+  @apply btn-primary;
+  background: var(--color-danger-600);
+  &:hover {
+    background: #b91c1c;
   }
-  .btn-ghost:hover { background: var(--color-surface-dim); border-color: var(--color-brand-300); }
+}
 
-  /* Input */
-  .input {
-    width:          100%;
-    padding:        0.5rem 0.75rem;
-    border:         1px solid var(--color-border);
-    border-radius:  var(--radius-btn);
-    font-size:      0.875rem;
-    background:     var(--color-surface);
-    transition:     border-color 150ms, box-shadow 150ms;
+@utility btn-ghost {
+  display:        inline-flex;
+  align-items:    center;
+  gap:            0.4rem;
+  padding:        0.5rem 1.25rem;
+  border:         1px solid var(--color-border);
+  border-radius:  var(--radius-btn);
+  background:     transparent;
+  font-size:      0.875rem;
+  font-weight:    500;
+  cursor:         pointer;
+  transition:     background 150ms, border-color 150ms;
+  &:hover {
+    background: var(--color-surface-dim);
+    border-color: var(--color-brand-300);
   }
-  .input:focus {
+}
+
+@utility input {
+  width:          100%;
+  padding:        0.5rem 0.75rem;
+  border:         1px solid var(--color-border);
+  border-radius:  var(--radius-btn);
+  font-size:      0.875rem;
+  background:     var(--color-surface);
+  transition:     border-color 150ms, box-shadow 150ms;
+  &:focus {
     border-color: var(--color-brand-500);
     box-shadow:   0 0 0 3px rgb(102 85 224 / 0.12);
     outline:      none;
   }
+}
 
-  /* Badge */
-  .badge-ok     { background: var(--color-ok-100);   color: var(--color-ok-600);   padding: 0.15rem 0.55rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
-  .badge-warn   { background: var(--color-warn-100); color: var(--color-warn-600); padding: 0.15rem 0.55rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
-  .badge-danger { background: var(--color-danger-100); color: var(--color-danger-600); padding: 0.15rem 0.55rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
+@utility badge-ok {
+  background: var(--color-ok-100);
+  color: var(--color-ok-600);
+  padding: 0.15rem 0.55rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+@utility badge-warn {
+  background: var(--color-warn-100);
+  color: var(--color-warn-600);
+  padding: 0.15rem 0.55rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+@utility badge-danger {
+  background: var(--color-danger-100);
+  color: var(--color-danger-600);
+  padding: 0.15rem 0.55rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
 }

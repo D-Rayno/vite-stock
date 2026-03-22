@@ -6,7 +6,9 @@
 //! before any notification I/O so POS operations are never blocked.
 
 use std::time::Duration;
-use tauri::{AppHandle, Manager};   // Manager is required for app.state()
+use tauri::{AppHandle, Manager};
+// FIX: NotificationExt must be in scope for .notification() to resolve on &AppHandle.
+use tauri_plugin_notification::NotificationExt;
 
 use crate::AppState;
 
@@ -91,14 +93,12 @@ fn collect_alert_data(app: &AppHandle) -> ((AlertGroup, AlertGroup, AlertGroup),
     let db    = state.db.lock().unwrap();
     let conn  = &db.0;
 
-    // Read configured warning window; use type annotation to guide inference.
     let warn_days: i64 = conn.query_row(
         "SELECT CAST(value AS INTEGER) FROM settings WHERE key='expiry_warn_days'",
         [],
         |r: &rusqlite::Row<'_>| r.get::<_, i64>(0),
     ).unwrap_or(30);
 
-    // Expiry alerts
     let mut expired_names:  Vec<String> = vec![];
     let mut critical_names: Vec<String> = vec![];
     let mut warning_names:  Vec<String> = vec![];
@@ -113,7 +113,6 @@ fn collect_alert_data(app: &AppHandle) -> ((AlertGroup, AlertGroup, AlertGroup),
            AND julianday(ib.expiry_date) - julianday('now') <= ?1
          ORDER BY ib.expiry_date ASC",
     ) {
-        // Explicit closure type annotation resolves the inference failure.
         if let Ok(rows) = stmt.query_map(
             [warn_days],
             |r: &rusqlite::Row<'_>| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)),
@@ -132,7 +131,6 @@ fn collect_alert_data(app: &AppHandle) -> ((AlertGroup, AlertGroup, AlertGroup),
         }
     }
 
-    // Low stock count
     let low_stock_count: i64 = conn.query_row(
         "SELECT COUNT(*) FROM (
             SELECT p.id
@@ -146,7 +144,6 @@ fn collect_alert_data(app: &AppHandle) -> ((AlertGroup, AlertGroup, AlertGroup),
         |r: &rusqlite::Row<'_>| r.get::<_, i64>(0),
     ).unwrap_or(0);
 
-    // Release the DB lock before notification I/O.
     drop(db);
 
     let make_group = |names: Vec<String>| {

@@ -10,7 +10,7 @@
 
 mod schema_v2;
 
-use rusqlite::{Connection, Result as SqlResult, params};
+use rusqlite::{Connection, Result as SqlResult};
 use std::path::Path;
 
 /// Thread-safe wrapper around `rusqlite::Connection`.

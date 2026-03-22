@@ -4,9 +4,8 @@
 //! All queries return plain JSON-serialisable structs.
 //! Heavy aggregations are done in SQLite — never in JavaScript.
 
-use chrono::Utc;
 use rusqlite::params;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tauri::{command, State};
 
 use crate::AppState;

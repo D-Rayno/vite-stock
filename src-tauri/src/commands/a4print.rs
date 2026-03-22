@@ -2,7 +2,7 @@
 //! A4 PDF export commands (Enterprise feature gate: A4_REPORTS).
 
 use chrono::Utc;
-use printpdf::Color;   // ← direct import; was incorrectly written as pdf::Color
+use printpdf::Color;
 use rusqlite::params;
 use tauri::{command, AppHandle, Manager, State};
 use tauri_plugin_opener::OpenerExt;
@@ -71,7 +71,9 @@ pub async fn cmd_export_dain_pdf(
     let date_str = now.format("%d/%m/%Y %H:%M").to_string();
     let doc_ref  = format!("DAIN-{}-{}", customer_id, now.format("%Y%m%d%H%M%S"));
 
-    let (customer_name, customer_phone, balance, credit_limit, entries, shop) = {
+    // FIX: the block returns a 5-tuple, not 6. Use 5 binding names and
+    // destructure the inner customer tuple separately after the block.
+    let (customer_info, balance, credit_limit, entries, shop) = {
         let db   = state.db.lock().unwrap();
         let conn = &db.0;
 
@@ -101,18 +103,23 @@ pub async fn cmd_export_dain_pdf(
                 entry_type:    if et == "debt" { "Debit".into() } else { "Remboursement".into() },
                 amount:        r.get(1)?,
                 notes:         r.get(2)?,
-                date:          r.get::<_, String>(3)?.chars().take(16).collect::<String>().replace('T', " "),
+                date:          r.get::<_, String>(3)?
+                                  .chars()
+                                  .take(16)
+                                  .collect::<String>()
+                                  .replace('T', " "),
                 balance_after: r.get(4)?,
             })
         }).map_err(|e| e.to_string())?
         .filter_map(|r| r.ok())
         .collect();
 
+        // 5-tuple: (customer_info, balance, credit_limit, entries, shop_info)
         ((cust_name, cust_phone, credit), balance, credit, entries, (shop_name, addr, phone, nif, nis))
     };
 
-    // Destructure the customer tuple
-    let (cust_name, cust_phone, _) = customer_name;
+    // Destructure the customer inner-tuple (credit field is unused here — credit_limit carries it)
+    let (cust_name, cust_phone, _) = customer_info;
 
     let pdf_bytes = pdf::build_dain_statement(&DainStatementData {
         shop:           ShopInfo { name: &shop.0, address: &shop.1, phone: &shop.2, nif: &shop.3, nis: &shop.4 },
@@ -256,7 +263,6 @@ pub async fn cmd_export_sales_pdf(
              ORDER BY t.created_at"
         ).map_err(|e| e.to_string())?;
 
-        // Color is imported from printpdf at the top of this file
         let table_rows: Vec<Vec<(String, Option<Color>)>> = stmt.query_map(
             params![date_from, date_to],
             |r| Ok((
@@ -271,12 +277,12 @@ pub async fn cmd_export_sales_pdf(
         .filter_map(|r| r.ok())
         .map(|(ref_num, date, customer, method, total, cashier)| {
             vec![
-                (ref_num,               None),
-                (date,                  None),
-                (customer,              None),
-                (method,                None),
+                (ref_num,                 None),
+                (date,                    None),
+                (customer,                None),
+                (method,                  None),
                 (format!("{:.2}", total), None),
-                (cashier,               None),
+                (cashier,                 None),
             ]
         })
         .collect();
@@ -292,8 +298,8 @@ pub async fn cmd_export_sales_pdf(
         (table_rows, (total_ttc, txn_count), (shop_name, addr, phone, nif, nis))
     };
 
-    let mut c       = pdf::PdfCanvas::new("RAPPORT DES VENTES");
-    let doc_ref     = format!("RPT-{}", now.format("%Y%m%d%H%M%S"));
+    let mut c      = pdf::PdfCanvas::new("RAPPORT DES VENTES");
+    let doc_ref    = format!("RPT-{}", now.format("%Y%m%d%H%M%S"));
 
     c.header(
         &shop.0, &shop.1, &shop.2, &shop.3, &shop.4,

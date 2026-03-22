@@ -11,9 +11,9 @@
 //!         --tier <basic|professional|enterprise>
 //!         [--expires YYYY-MM-DD]
 //!         [--label "Shop Name"]
+//!   show-hwid                          Print this machine's local HWID
 //!   verify --key <private.key> <license-key>   Verify a previously issued key
 
-use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD as B64, Engine};
@@ -68,6 +68,7 @@ fn main() {
 
     match args.get(1).map(|s| s.as_str()) {
         Some("gen-keypair") => cmd_gen_keypair(),
+        Some("show-hwid")   => cmd_show_hwid(),
         Some("issue")       => cmd_issue(&args[2..]),
         Some("verify")      => cmd_verify(&args[2..]),
         Some("help") | None => print_help(),
@@ -77,6 +78,17 @@ fn main() {
             std::process::exit(1);
         }
     }
+}
+
+fn cmd_show_hwid() {
+    let hwid = vite_stock_lib::license::hwid::compute_hwid();
+    println!("══════════════════════════════════════════════════════════════");
+    println!("  Local Hardware ID (HWID)");
+    println!("══════════════════════════════════════════════════════════════");
+    println!();
+    println!("Use this HWID to issue a license for this machine:");
+    println!("  {hwid}");
+    println!();
 }
 
 // ─── gen-keypair ──────────────────────────────────────────────────────────────
@@ -242,7 +254,6 @@ fn cmd_verify(args: &[String]) {
     let signature = ed25519_dalek::Signature::from_bytes(&sig_arr);
 
     let digest = Sha256::digest(&payload_bytes);
-    use ed25519_dalek::Verifier;
     match verifying_key.verify_strict(&digest, &signature) {
         Ok(_) => {
             let payload: serde_json::Value = serde_json::from_slice(&payload_bytes)
@@ -299,6 +310,9 @@ USAGE:
     --tier     basic | professional | enterprise  (default: basic)
     --expires  YYYY-MM-DD  (omit for perpetual)
     --label    "Customer shop name"
+
+  keygen show-hwid
+    Print this machine's local HWID for development activation.
 
   keygen verify --key <private.hex> <license-key-or-file>
     Verify a previously issued license key.

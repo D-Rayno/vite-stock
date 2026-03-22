@@ -210,6 +210,7 @@ pub struct CreatePurchaseOrderInput {
     pub notes:           Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PurchaseItem {
     pub id:                i64,

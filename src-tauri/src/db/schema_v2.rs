@@ -21,7 +21,7 @@
 //!   No column named card_number, pan, cvv, expiry_month, expiry_year, or
 //!   any payment-card-related field is present in any table.
 
-use rusqlite::{Connection, Result as SqlResult, params};
+use rusqlite::{Connection, Result as SqlResult};
 
 // ─── Public entry point ────────────────────────────────────────────────────────
 
@@ -170,6 +170,12 @@ fn create_purchase_orders(conn: &Connection) -> SqlResult<()> {
 // Inserting a purchase_item automatically creates an inventory_batch via
 // trigger trg_v2_create_batch_on_purchase.
 
+// cost_price_ttc    REAL    GENERATED ALWAYS AS (
+//                     cost_price_ht * (1 + COALESCE(
+//                         (SELECT rate FROM tax_rates WHERE id = tax_rate_id), 0
+//                     ))
+//                 ) VIRTUAL,
+
 fn create_purchase_items(conn: &Connection) -> SqlResult<()> {
     conn.execute_batch("
     CREATE TABLE IF NOT EXISTS purchase_items (
@@ -180,11 +186,6 @@ fn create_purchase_items(conn: &Connection) -> SqlResult<()> {
         quantity_received REAL    NOT NULL DEFAULT 0 CHECK(quantity_received >= 0),
         cost_price_ht     REAL    NOT NULL CHECK(cost_price_ht >= 0),
         tax_rate_id       INTEGER REFERENCES tax_rates(id),
-        cost_price_ttc    REAL    GENERATED ALWAYS AS (
-                              cost_price_ht * (1 + COALESCE(
-                                  (SELECT rate FROM tax_rates WHERE id = tax_rate_id), 0
-                              ))
-                          ) VIRTUAL,
         batch_number      TEXT,                       -- supplier lot/batch ref
         expiry_date       TEXT,                       -- ISO-8601 if perishable
         -- batch_id is set by trigger after the batch is created
@@ -426,12 +427,13 @@ fn upgrade_transactions(conn: &Connection) -> SqlResult<()> {
         "ALTER TABLE transactions ADD COLUMN void_reason TEXT",
         "ALTER TABLE transactions ADD COLUMN voided_by TEXT",
     ];
+    let result = safe_alters(conn, &alters);
     conn.execute_batch("
     CREATE INDEX IF NOT EXISTS idx_txn_voided  ON transactions(is_voided);
     CREATE INDEX IF NOT EXISTS idx_txn_session ON transactions(session_id);
     CREATE INDEX IF NOT EXISTS idx_txn_status  ON transactions(payment_status);
     ")?;
-    safe_alters(conn, &alters)
+    result
 }
 
 // ─── transaction_items — V2 upgrades ─────────────────────────────────────────

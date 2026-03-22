@@ -13,13 +13,14 @@
 //! printer supports it; otherwise we fall back to French.
 //! Bilingual support is handled by printing French on one line and Arabic below.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 // ─── ESC/POS opcode constants ──────────────────────────────────────────────────
 
 const ESC: u8 = 0x1B;
 const GS:  u8 = 0x1D;
 const LF:  u8 = 0x0A;
+#[allow(dead_code)]
 const HT:  u8 = 0x09;
 
 // ─── Public builder ────────────────────────────────────────────────────────────
@@ -51,19 +52,24 @@ impl EscPosBuilder {
 
     pub fn align_left(&mut self)   -> &mut Self { self.push(&[ESC, b'a', 0]) }
     pub fn align_center(&mut self) -> &mut Self { self.push(&[ESC, b'a', 1]) }
+    #[allow(dead_code)]
     pub fn align_right(&mut self)  -> &mut Self { self.push(&[ESC, b'a', 2]) }
 
     pub fn bold_on(&mut self)  -> &mut Self { self.push(&[ESC, b'E', 1]) }
     pub fn bold_off(&mut self) -> &mut Self { self.push(&[ESC, b'E', 0]) }
 
     pub fn double_height_on(&mut self)  -> &mut Self { self.push(&[ESC, b'!', 0x10]) }
+    #[allow(dead_code)]
     pub fn double_width_on(&mut self)   -> &mut Self { self.push(&[ESC, b'!', 0x20]) }
     pub fn double_size_on(&mut self)    -> &mut Self { self.push(&[ESC, b'!', 0x30]) }
     pub fn normal_size(&mut self)       -> &mut Self { self.push(&[ESC, b'!', 0x00]) }
 
+    #[allow(dead_code)]
     pub fn underline_on(&mut self)  -> &mut Self { self.push(&[ESC, b'-', 1]) }
+    #[allow(dead_code)]
     pub fn underline_off(&mut self) -> &mut Self { self.push(&[ESC, b'-', 0]) }
 
+    #[allow(dead_code)]
     pub fn lf(&mut self) -> &mut Self { self.buf.push(LF); self }
     pub fn lf_n(&mut self, n: u8) -> &mut Self { self.push(&[ESC, b'd', n]) }
 
@@ -80,18 +86,20 @@ impl EscPosBuilder {
         self.push(&[GS, b'V', b'A', 3])
     }
 
+    #[allow(dead_code)]
     pub fn partial_cut(&mut self) -> &mut Self {
         self.push(&[GS, b'V', b'B', 3])
     }
 
     /// Print a QR code (model 2, error correction L, size 4).
+    #[allow(dead_code)]
     pub fn qr_code(&mut self, data: &str) -> &mut Self {
         let d = data.as_bytes();
         let len = d.len() + 3;
-        let pL = (len & 0xFF) as u8;
-        let pH = ((len >> 8) & 0xFF) as u8;
+        let p_l = (len & 0xFF) as u8;
+        let p_h = ((len >> 8) & 0xFF) as u8;
         // Store QR data
-        self.push(&[GS, b'(', b'k', pL, pH, 0x31, 0x50, 0x30]);
+        self.push(&[GS, b'(', b'k', p_l, p_h, 0x31, 0x50, 0x30]);
         self.buf.extend_from_slice(d);
         // Print QR
         self.push(&[GS, b'(', b'k', 0x03, 0x00, 0x31, 0x51, 0x30]);
@@ -122,6 +130,7 @@ impl EscPosBuilder {
     }
 
     /// A centered title string.
+    #[allow(dead_code)]
     pub fn centered(&mut self, s: &str) -> &mut Self {
         let w     = self.width;
         let len   = display_len(s);
@@ -182,6 +191,7 @@ fn display_len(s: &str) -> usize {
 #[derive(Debug, Deserialize, Clone)]
 pub struct ReceiptItem {
     pub name_fr:    String,
+    #[allow(dead_code)]
     pub name_ar:    String,
     pub qty:        f64,
     pub unit_price: f64,
@@ -191,6 +201,7 @@ pub struct ReceiptItem {
 #[derive(Debug, Deserialize, Clone)]
 pub struct ReceiptData {
     pub shop_name_fr:    String,
+    #[allow(dead_code)]
     pub shop_name_ar:    String,
     pub shop_address:    String,
     pub shop_phone:      String,
@@ -300,6 +311,7 @@ pub fn build_receipt(data: &ReceiptData) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     #[test]
     fn builder_produces_init_bytes() {
